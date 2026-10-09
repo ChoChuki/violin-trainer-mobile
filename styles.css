@@ -166,8 +166,8 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .violin-note { position: absolute; height: 34px; width: 42px; border-radius: 9px; border: 1px solid #c2b4a1; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0; color: #24292f; touch-action: pan-x; box-shadow: 0 1px 3px #574b3833; }
 .violin-note.open-string { background: #f4e8ce; border-color: #b9a57d; }
 .violin-note.out-of-range { opacity: .43; }
-.violin-pitch { font-size: 12px; font-weight: 800; line-height: 17px; }
-.violin-position-number { font-size: 10px; font-weight: 650; line-height: 12px; color: #766d5b; }
+.violin-touch-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #9b8e7c; pointer-events: none; }
+.violin-note.correct .violin-touch-dot, .violin-note.active .violin-touch-dot, .violin-note.wrong .violin-touch-dot { background: #374151; }
 .violin-note.reference { outline: 3px solid #2563eb; outline-offset: -3px; }
 .violin-note.correct, .violin-note.active { background: #86d17c; opacity: 1; }
 .violin-note.wrong { background: #e88b8b; opacity: 1; }

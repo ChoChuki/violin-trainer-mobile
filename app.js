@@ -1,4 +1,4 @@
-const APP_VERSION = "violin-v2";
+const APP_VERSION = "violin-v2.2";
 const PLAY_DURATION = 1.4;
 const SUPPORTED_MIN_MIDI = 55;
 const SUPPORTED_MAX_MIDI = 88;
@@ -344,7 +344,7 @@ function setLanguage(language) {
     }
     if (instrumentMode === "violin") {
         elements.keyboard.querySelectorAll(".violin-note").forEach((button) => {
-            button.setAttribute("aria-label", `${button.dataset.string} \u00b7 ${t("violinPosition", { position: button.dataset.position })} \u00b7 ${noteName(Number(button.dataset.midi))}`);
+            button.setAttribute("aria-label", `${button.dataset.string} \u00b7 ${t("violinPosition", { position: button.dataset.position })}`);
         });
     }
     updatePlayButton();
@@ -911,14 +911,13 @@ function drawViolinFingerboard() {
             key.dataset.midi = String(midi);
             key.dataset.string = string.name;
             key.dataset.position = String(step);
-            key.setAttribute("aria-label", `${string.name} \u00b7 ${t("violinPosition", { position: step })} \u00b7 ${noteName(midi)}`);
-            const pitch = document.createElement("span");
-            pitch.className = "violin-pitch";
-            pitch.textContent = noteName(midi);
-            const number = document.createElement("span");
-            number.className = "violin-position-number";
-            number.textContent = String(step);
-            key.append(pitch, number);
+            key.setAttribute("aria-label", `${string.name} \u00b7 ${t("violinPosition", { position: step })}`);
+            // The training board deliberately gives no pitch or position-number hints.
+            // A neutral dot shows where to touch; open-string labels stay at the left.
+            const dot = document.createElement("span");
+            dot.className = "violin-touch-dot";
+            dot.setAttribute("aria-hidden", "true");
+            key.appendChild(dot);
             key.addEventListener("pointerdown", (event) => {
                 if (demoRunning) return;
                 event.preventDefault();

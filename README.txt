@@ -1,4 +1,4 @@
-Violin Ear Trainer v2 — standalone PWA (NOT a Piano/Violin toggle)
+Violin Ear Trainer v2.2 — standalone PWA (NOT a Piano/Violin toggle)
 
 Contents: full parity with Pitch Trainer Mobile v18: language selection (six locales),
 From/To, Key, Clef, Single note / Two notes, Apply, Play / Stop Test, Next,
@@ -11,7 +11,7 @@ Positions are SEMITONE OFFSETS, not finger numbers or physically proportional sp
 Playable range G3-E6; use Treble clef as normal violin default.
 
 Demo: same single-note and two-note practice tour, then Beethoven's
-Violin Concerto in D major, Op.61, III (Rondo), first 9 bars plus one-eighth pickup.
+Violin Concerto in D major, Op.61, III (Rondo), first 8 bars plus one-eighth pickup, ending on D4; removes the following A–E–F#–G–E tail.
 Solo violin part only (no fabricated orchestration), 132 quarter-note BPM.
 Source: https://github.com/MutopiaProject/MutopiaProject/blob/master/ftp/BeethovenLv/O61/violin_concerto_3/violin_concerto_3-lys/violinoprincipale.ly
 Mutopia #1165, original published score, public-domain edition.
@@ -19,4 +19,6 @@ Mutopia #1165, original published score, public-domain edition.
 Deployment: Create a NEW Cloudflare Worker static-assets site; do not upload
 this into the existing Pitch Trainer Worker. Keep index.html at upload root.
 First start requires internet for WebAudioFont and violin soundfont.
-Cache name violin-ear-trainer-v2, separate from piano PWA.
+Cache name violin-ear-trainer-v2.2, separate from piano PWA.
+
+Training surface: each fingerboard touch target is intentionally unlabelled (neutral dot), with no pitch names or numeric offsets. The four open strings remain identified; target pitch is revealed in feedback after answering. Accessible touch target labels say string and position, not the answer pitch.

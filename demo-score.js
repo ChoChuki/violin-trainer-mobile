@@ -1,10 +1,10 @@
 window.DEMO_SCORE_DATA = {
-  "source": "Beethoven, Violin Concerto in D major Op.61, movement III (Rondo), opening pickup + first 9 complete bars of the solo violin line, transcribed directly from Mutopia Project #1165 LilyPond source; no orchestral accompaniment",
+  "source": "Beethoven, Violin Concerto in D major Op.61, movement III (Rondo), opening pickup and first 8 bars of solo violin, ending on D4 before next phrase; directly transcribed from Mutopia Project #1165 LilyPond source; no accompaniment",
   "sourceScore": "https://github.com/MutopiaProject/MutopiaProject/blob/master/ftp/BeethovenLv/O61/violin_concerto_3/violin_concerto_3-lys/violinoprincipale.ly",
   "sourceEdition": "Breitkopf & Härtel 1862–1865, Mutopia #1165 (public domain)",
   "ticksPerQuarter": 384,
   "quartersPerBar": 3,
-  "stopTick": 10560,
+  "stopTick": 9216,
   "events": [
     {
       "part": "melody",
@@ -271,41 +271,6 @@ window.DEMO_SCORE_DATA = {
       "start": 8832,
       "end": 9024,
       "midi": 62
-    },
-    {
-      "part": "melody",
-      "bar": 8,
-      "start": 9216,
-      "end": 9408,
-      "midi": 57
-    },
-    {
-      "part": "melody",
-      "bar": 9,
-      "start": 9408,
-      "end": 9792,
-      "midi": 64
-    },
-    {
-      "part": "melody",
-      "bar": 9,
-      "start": 9792,
-      "end": 9984,
-      "midi": 66
-    },
-    {
-      "part": "melody",
-      "bar": 9,
-      "start": 9984,
-      "end": 10176,
-      "midi": 67
-    },
-    {
-      "part": "melody",
-      "bar": 9,
-      "start": 10176,
-      "end": 10368,
-      "midi": 64
     }
   ]
 };

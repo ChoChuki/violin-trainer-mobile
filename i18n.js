@@ -1,7 +1,7 @@
 const TRANSLATIONS = {
   "en": {
     "chooseViolin": "Tap the matching position on the violin string.",
-    "violinHint": "Four strings: G3, D4, A4, E5. Each column is one semitone from the open string, not a finger number.",
+    "violinHint": "Four open strings: G3, D4, A4, E5. Positions are unlabelled: listen, then tap the right spot.",
     "instrument": "Instrument",
     "piano": "Piano",
     "violin": "Violin",
@@ -69,7 +69,7 @@ const TRANSLATIONS = {
   },
   "de": {
     "chooseViolin": "Tippe die passende Stelle auf der Violinsaite an.",
-    "violinHint": "Vier Saiten: G3, D4, A4, E5. Jede Spalte entspricht einem Halbton ab der leeren Saite, keiner Fingernummer.",
+    "violinHint": "Vier leere Saiten: G3, D4, A4, E5. Die Griffpositionen sind nicht beschriftet: hören und tippen.",
     "instrument": "Instrument",
     "piano": "Klavier",
     "violin": "Violine",
@@ -137,7 +137,7 @@ const TRANSLATIONS = {
   },
   "ja": {
     "chooseViolin": "\u30d0\u30a4\u30aa\u30ea\u30f3\u6307\u677f\u306e\u6b63\u3057\u3044\u4f4d\u7f6e\u3092\u30bf\u30c3\u30d7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
-    "violinHint": "4\u5f26\u306f G3\u30fbD4\u30fbA4\u30fbE5\u3002\u6570\u5b57\u306f\u958b\u653e\u5f26\u304b\u3089\u306e\u534a\u97f3\u6570\u3067\u3001\u6307\u756a\u53f7\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
+    "violinHint": "開放弦は G3・D4・A4・E5。位置に音名は表示されません。音を聴いて場所をタップしてください。",
     "instrument": "\u697d\u5668",
     "piano": "\u30d4\u30a2\u30ce",
     "violin": "\u30d0\u30a4\u30aa\u30ea\u30f3",
@@ -205,7 +205,7 @@ const TRANSLATIONS = {
   },
   "it": {
     "chooseViolin": "Tocca la posizione giusta sulla corda del violino.",
-    "violinHint": "Quattro corde: G3, D4, A4, E5. I numeri indicano i semitoni dalla corda a vuoto, non le dita.",
+    "violinHint": "Quattro corde a vuoto: G3, D4, A4, E5. Le posizioni non sono etichettate: ascolta e tocca quella giusta.",
     "instrument": "Strumento",
     "piano": "Pianoforte",
     "violin": "Violino",
@@ -273,7 +273,7 @@ const TRANSLATIONS = {
   },
   "el": {
     "chooseViolin": "\u0391\u03b3\u03b3\u03af\u03be\u03c4\u03b5 \u03c4\u03b7 \u03c3\u03c9\u03c3\u03c4\u03ae \u03b8\u03ad\u03c3\u03b7 \u03c3\u03c4\u03b7 \u03c7\u03bf\u03c1\u03b4\u03ae \u03c4\u03bf\u03c5 \u03b2\u03b9\u03bf\u03bb\u03b9\u03bf\u03cd.",
-    "violinHint": "\u03a4\u03ad\u03c3\u03c3\u03b5\u03c1\u03b9\u03c2 \u03c7\u03bf\u03c1\u03b4\u03ad\u03c2: G3, D4, A4, E5. \u039f\u03b9 \u03b1\u03c1\u03b9\u03b8\u03bc\u03bf\u03af \u03b5\u03af\u03bd\u03b1\u03b9 \u03b7\u03bc\u03b9\u03c4\u03cc\u03bd\u03b9\u03b1 \u03b1\u03c0\u03cc \u03c4\u03b7\u03bd \u03b1\u03bd\u03bf\u03b9\u03c7\u03c4\u03ae \u03c7\u03bf\u03c1\u03b4\u03ae, \u03cc\u03c7\u03b9 \u03b1\u03c1\u03b9\u03b8\u03bc\u03bf\u03af \u03b4\u03b1\u03c7\u03c4\u03cd\u03bb\u03c9\u03bd.",
+    "violinHint": "Τέσσερις ανοιχτές χορδές: G3, D4, A4, E5. Οι θέσεις δεν έχουν ετικέτες: ακούστε και πατήστε τη σωστή.",
     "instrument": "\u038c\u03c1\u03b3\u03b1\u03bd\u03bf",
     "piano": "\u03a0\u03b9\u03ac\u03bd\u03bf",
     "violin": "\u0392\u03b9\u03bf\u03bb\u03af",
@@ -341,7 +341,7 @@ const TRANSLATIONS = {
   },
   "zh-TW": {
     "chooseViolin": "\u8acb\u9ede\u9078\u5c0f\u63d0\u7434\u7434\u5f26\u4e0a\u7684\u6b63\u78ba\u4f4d\u7f6e\u3002",
-    "violinHint": "\u56db\u6839\u5f26\u70ba G3\u3001D4\u3001A4\u3001E5\u3002\u6578\u5b57\u8868\u793a\u8ddd\u96e2\u7a7a\u5f26\u7684\u534a\u97f3\u6578\uff0c\u4e0d\u662f\u624b\u6307\u7de8\u865f\u3002",
+    "violinHint": "四根空弦：G3、D4、A4、E5。指板位置不顯示音名，請聽音後點選。",
     "instrument": "\u6a02\u5668",
     "piano": "\u92fc\u7434",
     "violin": "\u5c0f\u63d0\u7434",
