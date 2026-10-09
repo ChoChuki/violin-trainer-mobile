@@ -1,16 +1,25 @@
 {
-  "id": "./violin-ear-trainer",
   "name": "Violin Ear Trainer",
   "short_name": "Violin Trainer",
-  "description": "Standalone violin fingerboard, pitch and interval ear training.",
+  "description": "Independent violin ear trainer with four-string fingerboard, single- and two-note quizzes, and Beethoven Op.61 rondo demo.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f6f2eb",
-  "theme_color": "#f6f2eb",
+  "background_color": "#f4f5f7",
+  "theme_color": "#f4f5f7",
   "orientation": "portrait-primary",
   "icons": [
-    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
-    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

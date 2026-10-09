@@ -1,65 +1,98 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f2eb">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Violin Trainer">
-  <title>Violin Ear Trainer</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icon-192.png">
-  <link rel="stylesheet" href="./styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f4f5f7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Violin Ear Trainer">
+    <title>Violin Ear Trainer</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<main class="shell" id="shell">
-  <header class="header">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">𝄞</span>
-      <div><h1 id="title">Violin Ear Trainer</h1><p id="subtitle">Listen · Locate · Learn</p></div>
-    </div>
-    <label class="lang-wrap"><span id="langLabel">Language</span>
-      <select id="language" aria-label="Language">
-        <option value="en">English</option><option value="zh-TW">繁體中文</option>
-        <option value="ja">日本語</option><option value="de">Deutsch</option>
-        <option value="it">Italiano</option><option value="el">Ελληνικά</option>
-      </select>
-    </label>
-  </header>
-  <div id="status" class="status" role="status" aria-live="polite">Loading violin samples…</div>
-  <section class="settings" aria-label="Practice settings">
-    <label><span id="modeLabel">Mode</span>
-      <select id="mode"><option value="single">Single note</option><option value="interval">Two notes</option></select>
-    </label>
-    <label><span id="rangeLabel">Range</span>
-      <select id="range"><option value="beginner">G3–B4</option><option value="standard">G3–E5</option><option value="full">G3–E6</option></select>
-    </label>
-    <label><span id="labelsLabel">Note labels</span>
-      <select id="labels"><option value="yes">Show</option><option value="no">Hide</option></select>
-    </label>
-  </section>
-  <section class="controls" aria-label="Playback controls">
-    <button id="play" class="primary" disabled>Play</button>
-    <button id="next" disabled>Next</button>
-    <button id="replay" disabled>Repeat</button>
-    <button id="demo" disabled>Demo</button>
-  </section>
-  <section class="score-card">
-    <div class="score-top"><strong id="answer">Free play</strong><span id="score-label">Treble clef · G3–E6</span></div>
-    <svg id="staff" viewBox="0 0 720 164" role="img" aria-label="Treble clef staff"></svg>
-  </section>
-  <section class="board-card" aria-label="Violin fingerboard">
-    <div class="board-head"><strong id="boardLabel">Violin fingerboard</strong><span id="scrollHint">← swipe to explore →</span></div>
-    <div class="nav" id="positionNav" aria-label="Fingerboard navigation">
-      <button data-step="0" class="selected">0–4</button><button data-step="5">5–8</button><button data-step="9">9–12</button>
-    </div>
-    <div id="boardScroll" class="board-scroll"><div id="board" class="board"></div></div>
-    <p class="footnote" id="footnote">0 = open string. 1–12 = semitone distance, not finger numbers.</p>
-  </section>
-</main>
-<script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
-<script src="https://surikov.github.io/webaudiofontdata/sound/0400_JCLive_sf2_file.js"></script>
-<script src="./i18n.js"></script>
-<script src="./app.js"></script>
+    <main class="app-shell">
+        <header class="app-header">
+            <div class="header-top">
+                <div class="header-spacer"></div>
+                <h1 id="appTitle">Violin Ear Trainer</h1>
+                <label class="language-picker" for="languageSelect">
+                    <span id="languageLabel">Language</span>
+                    <select id="languageSelect" aria-label="Language">
+                        <option value="en">English</option>
+                        <option value="de">Deutsch</option>
+                        <option value="ja">&#26085;&#26412;&#35486;</option>
+                        <option value="it">Italiano</option>
+                        <option value="el">&#917;&#955;&#955;&#951;&#957;&#953;&#954;&#940;</option>
+                        <option value="zh-TW">&#32321;&#39636;&#20013;&#25991;</option>
+                    </select>
+                </label>
+            </div>
+            <p id="status" class="status">Loading violin samples...</p>
+        </header>
+
+        <section class="settings-card">
+            <div class="settings-grid">
+                <label>
+                    <span id="fromLabel">From</span>
+                    <select id="startNote"></select>
+                </label>
+                <label>
+                    <span id="toLabel">To</span>
+                    <select id="endNote"></select>
+                </label>
+                <label>
+                    <span id="keyLabel">Key</span>
+                    <select id="keySelect"></select>
+                </label>
+                <label>
+                    <span id="clefLabel">Clef</span>
+                    <select id="clefSelect">
+                        <option value="Treble">Treble</option>
+                        <option value="Bass">Bass</option>
+                        <option value="Auto">Auto</option>
+                    </select>
+                </label>
+            </div>
+            <div class="settings-actions">
+                <!-- Internal fixed instrument, not a selector; this is a separate violin-only app. -->
+                <select id="instrumentSelect" hidden aria-hidden="true" tabindex="-1"><option value="violin">Violin</option></select>
+                <label class="mode-picker" for="modeSelect">
+                    <span id="modeLabel">Mode</span>
+                    <select id="modeSelect">
+                        <option value="single">Single note</option>
+                        <option value="interval">Two notes</option>
+                    </select>
+                </label>
+                <button id="applyButton" class="secondary" disabled>Apply</button>
+            </div>
+        </section>
+
+        <section class="controls">
+            <button id="playButton" class="primary" disabled>Play</button>
+            <button id="nextButton" class="secondary" disabled>Next</button>
+            <button id="demoButton" class="secondary" disabled>Demo</button>
+        </section>
+
+        <section class="answer-card">
+            <div id="answerText" class="answer-text">Free play mode</div>
+            <svg id="staff" viewBox="0 0 800 185" role="img" aria-label="Music staff"></svg>
+        </section>
+
+        <section class="keyboard-card">
+            <nav id="octaveNav" class="octave-nav" aria-label="Octave navigation" hidden></nav>
+            <div id="keyboardScroller" class="keyboard-scroller">
+                <div id="keyboard" class="keyboard"></div>
+            </div>
+        </section>
+        <p id="helpText" class="hint"></p>
+    </main>
+
+    <script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
+    <script src="./i18n.js"></script>
+    <script src="./demo-score.js"></script>
+    <script src="./app.js"></script>
 </body>
 </html>

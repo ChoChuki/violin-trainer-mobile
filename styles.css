@@ -1,53 +1,177 @@
-:root{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#28303b;background:#f6f2eb;color-scheme:light}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;background:#f6f2eb}
-button,select{font:inherit}
-button{border-radius:10px;border:1px solid #d4c8b7;background:#fffaf4;min-height:42px;padding:0 10px;color:#392e29;font-weight:700;cursor:pointer;touch-action:manipulation}
-button:disabled{opacity:.42;cursor:default}
-button.primary{background:#523b32;border-color:#523b32;color:white}
-.shell{width:min(100%,760px);margin:auto;padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
-.header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
-.brand{display:flex;align-items:center;gap:8px;min-width:0}
-.brand-mark{display:grid;place-items:center;font-family:serif;font-size:42px;line-height:45px;color:#946446;width:39px}
-h1{margin:0;font-size:clamp(18px,4.9vw,24px);letter-spacing:-.5px;white-space:nowrap}
-.brand p{margin:0;font-size:11px;color:#78695f}
-.lang-wrap{display:grid;gap:1px;flex-shrink:0;font-size:10px;color:#776b65}
-.lang-wrap select{max-width:102px;min-width:90px;min-height:28px;font-size:12px;padding:2px 4px}
-.status{font-size:12px;line-height:17px;min-height:34px;height:34px;overflow:hidden;color:#5f524b;font-weight:650;text-align:center;padding-top:1px}
-.settings,.score-card,.board-card{background:#fffdf9;border:1px solid #e3d9cc;border-radius:15px;box-shadow:0 3px 14px #39261d10}
-.settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:9px}
-.settings label{min-width:0;display:grid;gap:3px}
-.settings label>span{font-size:11px;color:#796d64;font-weight:700}
-select{width:100%;min-width:0;min-height:34px;border-radius:8px;padding:0 5px;border:1px solid #cfc3b7;background:white;color:#332e2b;font-size:13px}
-.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:8px 0}
-.controls button{padding:0 3px;font-size:13px}
-.score-card{overflow:hidden;margin-bottom:8px}
-.score-top{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 12px 0;min-height:33px}
-.score-top strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.score-top span{font-size:11px;color:#8b7868;white-space:nowrap}
-#staff{display:block;width:100%;height:auto}
-.board-card{padding:9px}
-.board-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px}
-.board-head strong{font-size:14px}
-.board-head span{font-size:11px;color:#7f736d}
-.nav{display:flex;gap:6px;margin-bottom:6px}
-.nav button{min-height:30px;padding:0 12px;font-size:12px;color:#665247}
-.nav button.selected{background:#f2e5d4;border-color:#c19b7e;color:#653e23}
-.board-scroll{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;border-radius:10px}
-.board{height:225px;width:735px;position:relative;background:linear-gradient(100deg,#d7b083,#bc8961 46%,#976547 100%);border:2px solid #835c3f;border-radius:9px;user-select:none}
-.string{position:absolute;left:48px;right:6px;height:2px;background:#dfd9cd;pointer-events:none;box-shadow:0 1px 2px #3d3028b0}
-.string-label{position:absolute;left:4px;width:40px;height:35px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;background:#faf0df;border:1px solid #7e624e;color:#4e3629;z-index:2}
-.place{position:absolute;width:48px;height:43px;border-radius:11px;background:#fff9eeeb;color:#432f24;border:1px solid #7d6049;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;box-shadow:0 2px 3px #3a23162a;touch-action:manipulation;padding:0}
-.place .pitch{font-size:12px;font-weight:850;line-height:17px}
-.place .offset{font-size:10px;line-height:12px;color:#786358}
-.place.open{background:#e9dcc8;border-width:2px}
-.place.outside{opacity:.58}
-.place.reference{outline:3px solid #215eaf;outline-offset:-3px}
-.place.correct{background:#90d79d;color:#183923;opacity:1}
-.place.wrong{background:#efa09a;color:#4d191a;opacity:1}
-.place.active{background:#eee1ab;color:#614620;opacity:1}
-.footnote{font-size:11px;color:#71675d;line-height:1.45;margin:7px 1px 0}
-.shell.demo-running button,.shell.demo-running select,.shell.demo-running .board{pointer-events:none}
-.shell.demo-running #demo{pointer-events:auto}
-@media(max-width:380px){.shell{padding-left:8px;padding-right:8px}.score-top{padding-left:8px;padding-right:8px}.score-top span{font-size:10px}.board{height:222px}}
-@media(max-height:700px) and (max-width:619px){.shell{padding-top:5px}.header{margin-bottom:3px}.status{height:30px;min-height:30px}.settings{padding:7px}.controls{margin:5px 0}.controls button{min-height:36px}.score-top{padding-top:5px}.nav{margin-bottom:4px}.board-card{padding:7px}.board{height:201px}.place{height:37px}.footnote{margin:3px 1px 0}}
+:root {
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #f4f5f7;
+    color: #111827;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; min-height: 100%; background: #f4f5f7; }
+body { overscroll-behavior-y: contain; }
+button, select { font: inherit; }
+button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 12px;
+    padding: 0 12px;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+.primary { background: #111827; color: white; }
+.secondary { background: white; color: #111827; border: 1px solid #d1d5db; }
+.danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.full-width { width: 100%; margin-top: 7px; }
+.app-shell {
+    width: min(100%, 760px);
+    margin: 0 auto;
+    padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+}
+.app-header { text-align: center; margin-bottom: 8px; }
+.header-top {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 4px;
+}
+.app-header h1 { margin: 0; font-size: clamp(20px, 5.6vw, 28px); letter-spacing: -0.4px; }
+.language-picker { justify-self: end; display: grid; text-align: left; gap: 4px; }
+.language-picker span { font-size: 10px; color: #6b7280; font-weight: 700; }
+.language-picker select { min-height: 30px; max-width: 100px; padding: 2px 3px; font-size: 12px; }
+.status { height: 36px; min-height: 36px; overflow: hidden; margin: 3px 0 0; font-size: 13px; line-height: 18px; font-weight: 650; color: #374151; }
+.settings-card, .answer-card, .keyboard-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 5px 18px rgba(17, 24, 39, 0.05);
+}
+.settings-card { padding: 10px; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.settings-grid label { display: grid; gap: 2px; }
+.settings-grid span, .mode-picker span, .instrument-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.settings-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(92px, .8fr); align-items: end; gap: 10px; margin-top: 7px; }
+.mode-picker, .instrument-picker { display: grid; gap: 2px; min-width: 0; }
+.settings-actions button { min-height: 35px; }
+select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d1d5db; background: #fff; padding: 0 9px; color: #111827; }
+.controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.controls button { font-size: 13px; padding: 0 6px; }
+.answer-card { overflow: hidden; }
+.answer-text { height: 38px; padding: 3px 10px 0; line-height: 32px; font-size: 17px; font-weight: 800; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#staff { display: block; width: 100%; height: auto; }
+.keyboard-card { padding: 7px; }
+.keyboard-scroller { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.keyboard { position: relative; height: 214px; min-width: 100%; user-select: none; }
+.octave-nav { min-height: 38px; display: flex; gap: 7px; overflow-x: auto; scrollbar-width: thin; padding: 1px 0 5px; }
+.octave-nav[hidden] { display: flex; visibility: hidden; }
+.octave-jump { min-width: 58px; min-height: 32px; flex-shrink: 0; padding: 4px 9px; font-size: 13px; border: 1px solid #d1d5db; color: #374151; background: #f9fafb; border-radius: 9px; }
+.octave-jump.current { color: #1d4ed8; background: #eff6ff; border-color: #93c5fd; }
+.octave-mark { position: absolute; top: 192px; display: inline-flex; align-items: center; padding: 0 3px; height: 18px; color: #1d4ed8; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; z-index: 4; border-left: 2px solid #60a5fa; background: #eff6ff; border-radius: 0 3px 3px 0; }
+
+.piano-key { position: absolute; top: 0; border: 1px solid #111827; border-radius: 0 0 7px 7px; padding: 0; touch-action: pan-x; user-select: none; }
+.white-key { width: 52px; height: 186px; background: #ffffff; z-index: 1; }
+.black-key { width: 32px; height: 120px; background: #111111; z-index: 2; }
+/* A blue ring marks the public reference pitch; wrong/correct fills stay legible. */
+.white-key.reference { box-shadow: inset 0 0 0 4px #2563eb; }
+.black-key.reference { box-shadow: inset 0 0 0 3px #93c5fd; }
+.white-key.correct, .white-key.active { background: #86d17c; }
+.white-key.wrong { background: #e88b8b; }
+.black-key.correct, .black-key.active { background: #4f9d48; }
+.black-key.wrong { background: #b94a4a; }
+.hint { margin: 6px 6px 0; color: #6b7280; font-size: 12px; line-height: 1.45; text-align: center; }
+#demoPointer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(17, 24, 39, 0.20);
+    border: 2px solid rgba(17, 24, 39, 0.52);
+    transform: translate(-50%, -50%) scale(0);
+    transition: left 260ms ease, top 260ms ease, transform 140ms ease, opacity 140ms ease;
+    opacity: 0;
+    z-index: 9999;
+    pointer-events: none;
+}
+#demoPointer.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#demoPointer.tap { transform: translate(-50%, -50%) scale(0.68); }
+@media (min-width: 620px) {
+    .settings-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .controls { grid-template-columns: repeat(5, 1fr); }
+    .controls button { font-size: 14px; }
+}
+
+/* Distinct simultaneous touch indicators during automated piano performance. */
+.demo-music-pointer {
+    position: fixed;
+    width: 17px;
+    height: 17px;
+    background: rgba(37, 99, 235, 0.28);
+    border: 2px solid rgba(37, 99, 235, 0.64);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9998;
+    opacity: 0;
+    pointer-events: none;
+}
+.demo-music-pointer.visible { opacity: 1; }
+
+/* Demo uses the regular keyboard and stable staff dimensions. */
+.app-shell.demo-running .settings-card,
+.app-shell.demo-running .controls,
+.app-shell.demo-running .octave-nav,
+.app-shell.demo-running .keyboard,
+.app-shell.demo-running .language-picker {
+    pointer-events: none;
+}
+.app-shell.demo-running #demoButton {
+    pointer-events: auto;
+}
+
+@media (max-width: 619px) {
+    .controls button { min-height: 40px; }
+    .hint { display: none; }
+}
+@media (max-height: 730px) and (max-width: 619px) {
+    .keyboard { height: 194px; }
+    .white-key { height: 170px; }
+    .black-key { height: 109px; }
+    .octave-mark { top: 175px; }
+}
+
+@media (max-height: 700px) and (max-width: 619px) {
+    .app-shell { padding-top: max(6px, env(safe-area-inset-top)); }
+    .app-header { margin-bottom: 4px; }
+    .settings-card { padding: 7px; }
+    .settings-grid { gap: 4px 8px; }
+    .settings-grid label { gap: 1px; }
+    select { min-height: 31px; }
+    .settings-card .full-width { min-height: 34px; }
+    .controls { margin: 5px 0; }
+    .controls button { min-height: 36px; }
+    .answer-text { height: 32px; line-height: 28px; }
+    .octave-nav { min-height: 32px; }
+    .keyboard { height: 171px; }
+    .white-key { height: 150px; }
+    .black-key { height: 96px; }
+    .octave-mark { top: 152px; }
+}
+
+/* Schematic, chromatic violin fingerboard. Numbers are semitone offsets from each open string,
+   not physical finger numbers or fret locations (violin has no frets). */
+.keyboard.violin-board { height: 174px; min-width: 0; background: linear-gradient(90deg, #fbfaf7, #f2ede3); border-radius: 10px; }
+.violin-string-line { position: absolute; left: 39px; right: 3px; height: 2px; background: #b5a48e; pointer-events: none; }
+.violin-string-label { position: absolute; left: 3px; width: 37px; height: 26px; z-index: 3; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #6b4930; background: #fffaf1; border-radius: 6px; border: 1px solid #d8cbb8; pointer-events: none; }
+.violin-note { position: absolute; height: 34px; width: 42px; border-radius: 9px; border: 1px solid #c2b4a1; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0; color: #24292f; touch-action: pan-x; box-shadow: 0 1px 3px #574b3833; }
+.violin-note.open-string { background: #f4e8ce; border-color: #b9a57d; }
+.violin-note.out-of-range { opacity: .43; }
+.violin-pitch { font-size: 12px; font-weight: 800; line-height: 17px; }
+.violin-position-number { font-size: 10px; font-weight: 650; line-height: 12px; color: #766d5b; }
+.violin-note.reference { outline: 3px solid #2563eb; outline-offset: -3px; }
+.violin-note.correct, .violin-note.active { background: #86d17c; opacity: 1; }
+.violin-note.wrong { background: #e88b8b; opacity: 1; }
+@media (max-height: 730px) and (max-width: 619px) { .keyboard.violin-board { height: 174px; } }
+@media (max-height: 700px) and (max-width: 619px) { .keyboard.violin-board { height: 174px; } }
+
+#instrumentSelect[hidden] { display: none !important; }
