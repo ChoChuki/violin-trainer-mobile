@@ -175,3 +175,10 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 @media (max-height: 700px) and (max-width: 619px) { .keyboard.violin-board { height: 174px; } }
 
 #instrumentSelect[hidden] { display: none !important; }
+
+/* Two-note-only maximum interval. Keep single-note layout unchanged. */
+.interval-picker { display: grid; gap: 2px; min-width: 0; }
+.settings-grid span, .interval-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.interval-picker[hidden] { display: none; }
+.settings-actions.has-interval-limit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(72px, .8fr); }
+.settings-actions.has-interval-limit { gap: 7px; }

@@ -1,4 +1,4 @@
-const APP_VERSION = "violin-v2.2.1";
+const APP_VERSION = "violin-v2.2.2";
 const PLAY_DURATION = 0.7;
 const SUPPORTED_MIN_MIDI = 55;
 const SUPPORTED_MAX_MIDI = 88;
@@ -198,6 +198,8 @@ const elements = {
     keySelect: document.getElementById("keySelect"),
     clefSelect: document.getElementById("clefSelect"),
     modeSelect: document.getElementById("modeSelect"),
+    maxIntervalSelect: document.getElementById("maxIntervalSelect"),
+    intervalPicker: document.getElementById("intervalPicker"),
     instrumentSelect: document.getElementById("instrumentSelect"),
     applyButton: document.getElementById("applyButton"),
     playButton: document.getElementById("playButton"),
@@ -216,6 +218,9 @@ let instrumentMode = "violin";
 let violinReady = false;
 let violinLoadingPromise = null;
 let currentReferenceMidi = null;
+// The last real quiz target survives Next/Stop/Apply and is not changed by Demo.
+let lastQuestionMidi = null;
+let maxIntervalSemitones = null; // null = unlimited
 let questionSerial = 0;
 let currentMidi = null;
 let answered = false;
@@ -317,7 +322,7 @@ function setLanguage(language) {
     document.getElementById("languageSelect").value = currentLanguage;
     const labels = {
         languageLabel: "language", fromLabel: "from", toLabel: "to",
-        keyLabel: "key", clefLabel: "clef", modeLabel: "mode", applyButton: "apply",
+        keyLabel: "key", clefLabel: "clef", modeLabel: "mode", maxIntervalLabel: "maxInterval", applyButton: "apply",
         playButton: "play", nextButton: "next", demoButton: "demo", helpText: "hint"
     };
     for (const [id, key] of Object.entries(labels)) {
@@ -331,6 +336,7 @@ function setLanguage(language) {
     for (const option of elements.modeSelect.options) {
         option.textContent = t(option.value);
     }
+    elements.maxIntervalSelect.options[0].textContent = t("unlimited");
     const clefSelect = elements.clefSelect;
     for (const option of clefSelect.options) {
         option.textContent = t(option.value.toLowerCase());
@@ -1102,6 +1108,7 @@ function setControlsEnabled(enabled) {
     elements.endNote.disabled = !enabled;
     elements.keySelect.disabled = !enabled;
     elements.clefSelect.disabled = !enabled;
+    elements.maxIntervalSelect.disabled = !enabled;
     elements.modeSelect.disabled = !enabled;
     elements.instrumentSelect.disabled = !enabled;
     document.getElementById("demoButton").disabled = !enabled;
@@ -1291,37 +1298,62 @@ function updatePlayButton() {
     elements.playButton.classList.toggle("primary", !testActive);
 }
 
+function updateIntervalPickerVisibility() {
+    const visible = elements.modeSelect.value === "interval";
+    elements.intervalPicker.hidden = !visible;
+    elements.intervalPicker.parentElement.classList.toggle("has-interval-limit", visible);
+}
+
 function newQuestion() {
-    if (!ready) {
-        return;
-    }
+    if (!ready) return;
     releaseAllKeys();
     window.clearTimeout(freeDisplayTimeout);
     resetKeyboardColors();
+
+    // Avoid repeating the exact MIDI target from the previous real question,
+    // even across Stop / Apply. Requires at least two notes in the range.
+    const targets = [];
+    for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
+        if (pitch !== lastQuestionMidi) targets.push(pitch);
+    }
+    if (!targets.length) {
+        setStatus("distinctRangeError");
+        return;
+    }
+    const target = targets[Math.floor(Math.random() * targets.length)];
 
     testActive = true;
     answered = false;
     questionSerial += 1;
     updatePlayButton();
     if (testMode === "interval") {
-        currentReferenceMidi = Math.floor(Math.random() * (maxMidi - minMidi + 1)) + minMidi;
-        const targets = [];
-        for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
-            if (pitch !== currentReferenceMidi && Math.abs(pitch - currentReferenceMidi) <= 12) {
-                targets.push(pitch);
-            }
+        // Pick a reference in the configured From/To range, different from the
+        // target and no farther apart than the user-selected maximum interval.
+        const limit = maxIntervalSemitones ?? (maxMidi - minMidi);
+        const references = [];
+        for (let pitch = Math.max(minMidi, target - limit);
+            pitch <= Math.min(maxMidi, target + limit); pitch += 1) {
+            if (pitch !== target) references.push(pitch);
         }
-        currentMidi = targets[Math.floor(Math.random() * targets.length)];
+        if (!references.length) {
+            setStatus("intervalRangeError");
+            testActive = false;
+            updatePlayButton();
+            return;
+        }
+        currentReferenceMidi = references[Math.floor(Math.random() * references.length)];
+        currentMidi = target;
         setStatus("listenInterval", { note: spelledNoteName(currentReferenceMidi, KEY_FIFTHS[keyName]) });
         setAnswer("chooseInterval");
         markReferenceKey();
         jumpToReferenceOctave();
     } else {
         currentReferenceMidi = null;
-        currentMidi = Math.floor(Math.random() * (maxMidi - minMidi + 1)) + minMidi;
+        currentMidi = target;
         setStatus("listen");
         setAnswer("choose");
     }
+    lastQuestionMidi = target;
     drawQuestionStaff();
     updateStaffReplayAccess();
     playQuestion();
@@ -1452,8 +1484,8 @@ function applySettings() {
         setStatus("invalidRange");
         return;
     }
-    if (elements.modeSelect.value === "interval" && startMidi === endMidi) {
-        setStatus("intervalRangeError");
+    if (startMidi === endMidi) {
+        setStatus("distinctRangeError");
         return;
     }
 
@@ -1465,6 +1497,9 @@ function applySettings() {
     keyName = elements.keySelect.value;
     clefMode = elements.clefSelect.value;
     testMode = elements.modeSelect.value;
+    maxIntervalSemitones = elements.maxIntervalSelect.value === "unlimited"
+        ? null : Number(elements.maxIntervalSelect.value);
+    updateIntervalPickerVisibility();
 
     releaseAllKeys();
     window.clearTimeout(freeDisplayTimeout);
@@ -1515,6 +1550,16 @@ function populateSelectors() {
     elements.endNote.value = String(DEFAULT_MAX_MIDI);
     elements.keySelect.value = "C major";
     elements.clefSelect.value = "Treble";
+    const unlimited = document.createElement("option");
+    unlimited.value = "unlimited";
+    elements.maxIntervalSelect.appendChild(unlimited);
+    for (let semitones = 1; semitones <= 24; semitones += 1) {
+        const option = document.createElement("option");
+        option.value = String(semitones);
+        option.textContent = String(semitones);
+        elements.maxIntervalSelect.appendChild(option);
+    }
+    elements.maxIntervalSelect.value = "unlimited";
     elements.modeSelect.value = "single";
     elements.instrumentSelect.value = "violin";
 }
@@ -1548,6 +1593,7 @@ const unlessDemo = (callback) => (event) => {
 };
 
 elements.applyButton.addEventListener("click", unlessDemo(applySettings));
+elements.modeSelect.addEventListener("change", unlessDemo(updateIntervalPickerVisibility));
 elements.playButton.addEventListener("click", unlessDemo(() => {
     if (testActive) stopTest();
     else newQuestion();
@@ -1574,6 +1620,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("blur", releaseAllKeys);
 
 populateSelectors();
+updateIntervalPickerVisibility();
 setLanguage(resolveInitialLanguage());
 drawKeyboard();
 drawStaff();
@@ -1873,13 +1920,14 @@ async function playViolinConcertoDemo() {
 
 function captureDemoSnapshot() {
     return {
-        applied: { minMidi, maxMidi, keyName, clefMode, testMode, instrumentMode },
+        applied: { minMidi, maxMidi, keyName, clefMode, testMode, maxIntervalSemitones, instrumentMode },
         form: {
             startNote: elements.startNote.value,
             endNote: elements.endNote.value,
             keySelect: elements.keySelect.value,
             clefSelect: elements.clefSelect.value,
             modeSelect: elements.modeSelect.value,
+            maxIntervalSelect: elements.maxIntervalSelect.value,
             instrumentSelect: elements.instrumentSelect.value
         },
         state: { testActive, answered, currentMidi, currentReferenceMidi },
@@ -1901,6 +1949,8 @@ function restoreDemoSnapshot(snapshot) {
     elements.keySelect.value = applied.keyName;
     elements.clefSelect.value = applied.clefMode;
     elements.modeSelect.value = applied.testMode;
+    elements.maxIntervalSelect.value = applied.maxIntervalSemitones === null
+        ? "unlimited" : String(applied.maxIntervalSemitones);
     elements.instrumentSelect.value = applied.instrumentMode;
     applySettings();
 
@@ -1909,6 +1959,8 @@ function restoreDemoSnapshot(snapshot) {
     elements.keySelect.value = form.keySelect;
     elements.clefSelect.value = form.clefSelect;
     elements.modeSelect.value = form.modeSelect;
+    elements.maxIntervalSelect.value = form.maxIntervalSelect;
+    updateIntervalPickerVisibility();
     elements.instrumentSelect.value = form.instrumentSelect;
     testActive = state.testActive;
     answered = state.answered;

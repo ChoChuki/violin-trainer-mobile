@@ -1,3 +1,24 @@
+New release: violin-v2.2.2 — non-repeating targets and user-selectable maximum two-note interval
+
+Based on the user-provided violin-v2.2.1 source package. All original demo-score.js events and demo audio
+scheduling remain unchanged. The ordinary 0.7-second single-note audition remains unchanged.
+
+- Single note: each new quiz target excludes the previous real quiz target (exact MIDI pitch).
+- Two notes: the target likewise never equals the previous real quiz target. The two pitches
+  must be different and must both lie inside the original From/To range.
+- Two notes: Max interval select offers Unlimited (default) or any 1–24 semitones.
+  A numeric limit applies to the absolute semitone distance, up or down.
+- At least two pitches in From/To are required for any quiz, otherwise a translated error
+  appears at Apply. This avoids impossible no-repeat single-pitch quiz ranges.
+- Next, not a timer, advances to the next question. The previous real target remains
+  remembered over Stop/Apply; the prerecorded scripted Demo does not alter it.
+- The new setting is applied by pressing Apply; its selector is visible only when the
+  form's Mode is Two notes. The Demo snapshot restores both applied and un-applied settings.
+- Piano and Violin are separate PWAs, with separate caches and upload destinations.
+
+Cloudflare Worker static assets: use the _site.zip, extract its nine website files
+into the EXISTING respective Worker and Deploy. Do not overwrite the other app.
+
 Violin Ear Trainer v2.2.1 — standalone PWA (NOT a Piano/Violin toggle)
 
 Contents: full parity with Pitch Trainer Mobile v18: language selection (six locales),
