@@ -66,11 +66,25 @@
                         <option value="interval">Two notes</option>
                     </select>
                 </label>
-                <label class="interval-picker" id="intervalPicker" for="maxIntervalSelect" hidden>
-                    <span id="maxIntervalLabel">Max interval (semitones)</span>
-                    <select id="maxIntervalSelect" aria-labelledby="maxIntervalLabel"></select>
-                </label>
                 <button id="applyButton" class="secondary" disabled>Apply</button>
+                <div class="interval-settings" id="intervalPicker" hidden>
+                    <label class="interval-picker" for="minIntervalSelect">
+                        <span id="minIntervalLabel">Min interval (semitones)</span>
+                        <select id="minIntervalSelect" aria-labelledby="minIntervalLabel"></select>
+                    </label>
+                    <label class="interval-picker" for="maxIntervalSelect">
+                        <span id="maxIntervalLabel">Max interval (semitones)</span>
+                        <select id="maxIntervalSelect" aria-labelledby="maxIntervalLabel"></select>
+                    </label>
+                    <label class="interval-picker" for="directionSelect">
+                        <span id="targetDirectionLabel">Target direction</span>
+                        <select id="directionSelect" aria-labelledby="targetDirectionLabel">
+                            <option value="higher">Higher</option>
+                            <option value="lower">Lower</option>
+                            <option value="both">Both (random)</option>
+                        </select>
+                    </label>
+                </div>
             </div>
         </section>
 

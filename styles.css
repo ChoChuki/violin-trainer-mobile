@@ -176,9 +176,10 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 
 #instrumentSelect[hidden] { display: none !important; }
 
-/* Two-note-only maximum interval. Keep single-note layout unchanged. */
-.interval-picker { display: grid; gap: 2px; min-width: 0; }
+/* Two-note-only controls stay on a separate row, readable at 360px width. */
+.interval-settings { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 7px; }
+.interval-settings[hidden] { display: none; }
+.interval-picker { display: grid; gap: 2px; min-width: 0; align-content: end; }
 .settings-grid span, .interval-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
-.interval-picker[hidden] { display: none; }
-.settings-actions.has-interval-limit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(72px, .8fr); }
-.settings-actions.has-interval-limit { gap: 7px; }
+.interval-picker span { line-height: 1.15; }
+.interval-picker select { min-width: 0; padding-left: 5px; padding-right: 3px; }
