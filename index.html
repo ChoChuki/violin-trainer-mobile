@@ -64,6 +64,7 @@
                     <select id="modeSelect">
                         <option value="single">Single note</option>
                         <option value="interval">Two notes</option>
+                        <option value="ap">Absolute pitch</option>
                     </select>
                 </label>
                 <button id="applyButton" class="secondary" disabled>Apply</button>
@@ -85,6 +86,17 @@
                         </select>
                     </label>
                 </div>
+                <div class="ap-settings" id="apPicker" hidden>
+                    <label class="ap-picker" for="apTrialsSelect">
+                        <span id="apTrialsLabel">Questions per round</span>
+                        <select id="apTrialsSelect"><option value="12">12</option><option value="20">20</option></select>
+                    </label>
+                    <label class="ap-picker" for="apTimeSelect">
+                        <span id="apTimeLabel">Response limit</span>
+                        <select id="apTimeSelect"><option value="5">5 seconds</option><option value="2">2 seconds</option><option value="none">No limit</option></select>
+                    </label>
+                    <p id="apDescription" class="ap-description">No feedback until the round ends · jumps over 1 octave · answer by note name</p>
+                </div>
             </div>
         </section>
 
@@ -92,6 +104,11 @@
             <button id="playButton" class="primary" disabled>Play</button>
             <button id="nextButton" class="secondary" disabled>Next</button>
             <button id="demoButton" class="secondary" disabled>Demo</button>
+        </section>
+
+        <section class="ap-answer-panel" id="apAnswerPanel" hidden>
+            <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
+            <div id="apReview" class="ap-review" hidden></div>
         </section>
 
         <section class="answer-card">

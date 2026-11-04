@@ -1,3 +1,39 @@
+Violin Ear Trainer v2.2.4 — added Absolute Pitch assessment mode
+
+Based on the complete preceding v18.3 / v2.2.3 source archive, with no refactoring.
+The Mode selector now offers a third, strictly optional Absolute pitch mode alongside
+unchanged Single note and Two notes. Default Mode remains Single note.
+
+Absolute pitch mode:
+- 12 or 20 questions per round; 5s default limit, optional 2s or untimed.
+- Only one isolated note is sounded per question; no reference/replay/correct-note audio.
+- A minimum 24-semitone From/To span is required. Consecutive targets differ by
+  >12 semitones AND by pitch class; target generation uses finite eligible pools.
+- Answer via one of 12 note-name buttons, ignoring octave to test pitch chroma.
+- Suppress correctness, pitch-name and staff feedback until the full round ends.
+  Do not play instrument keys in this mode, since that would give a reference pitch.
+- Next remains a manual action after an answer or timeout. On finishing, show
+  per-question answers and total score; Stop Test cancels the round.
+- Demo starts/restores the previous mode, settings, and current test state.
+- All six interface languages and independent Service Worker cache versions are updated.
+
+Original Single note, Two notes, unrestricted free playing, demo-score.js events,
+0.7s ordinary single-note audio, interval 0.6s/0.9s audio and held-key timing
+are preserved. This mode reduces reliance on relative-pitch strategies but cannot
+prove that all relative-pitch strategies have been eliminated.
+
+To deploy, extract this version's _site.zip and upload its NINE site files to the
+EXISTING appropriate Cloudflare Worker, with index.html at the root.
+Never upload the piano ZIP to the violin Worker, or vice versa.
+
+Evidence: Wong et al. (2025), Psychonomic Bulletin & Review,
+DOI: 10.3758/s13423-024-02620-2. The paper includes restricted-feedback
+assessment, octave-spanning adjacent test tones, chroma generalization and
+response time windows. Our implementation is not a reproduction of their full
+8-week training curriculum.
+
+--- Previous release notes ---
+
 Violin Ear Trainer v2.2.3 — Two notes: minimum/maximum interval and target direction
 
 New in this release:
@@ -62,3 +98,7 @@ v2.2.1 patch (based on v2.2, NOT v2.3):
 - Rotated service-worker cache key so the deployed PWA can pick up the new JavaScript.
 
 To update an existing deployed Violin Worker, upload all nine web assets in the site ZIP to the SAME Worker (not the Piano Worker). Reload the installed app after deployment.
+
+Absolute-pitch assessment mode: 12/20-trial batches; feedback only after the round;
+>12 semitone adjacent jumps; 12 chroma answers across octaves; optional 5s/2s/untimed.
+Existing Single / Two notes / Demo are unchanged except for mode integration.

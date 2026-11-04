@@ -183,3 +183,19 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .settings-grid span, .interval-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
 .interval-picker span { line-height: 1.15; }
 .interval-picker select { min-width: 0; padding-left: 5px; padding-right: 3px; }
+
+/* Extra assessment UI never affects legacy single/two-note layouts. */
+.ap-settings { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.ap-settings[hidden], .ap-answer-panel[hidden], .ap-review[hidden] { display: none; }
+.ap-picker { display: grid; gap: 2px; min-width: 0; }
+.ap-picker span { font-size: 12px; font-weight: 700; line-height: 1.2; color: #6b7280; }
+.ap-description { grid-column: 1 / -1; margin: 0; font-size: 11px; color: #6b7280; line-height: 1.4; }
+.ap-answer-panel { margin: 7px 0; padding: 8px; border: 1px solid #e5e7eb; border-radius: 14px; background: white; }
+.ap-answer-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ap-note-button { padding: 0 2px; min-width: 0; min-height: 48px; font-size: 12px; overflow-wrap: anywhere; }
+.app-shell.ap-mode .keyboard-card, .app-shell.ap-mode .answer-card { display: none; }
+.app-shell.ap-complete .ap-answer-buttons { display: none; }
+.ap-review { padding: 7px 2px 0; font-size: 12px; line-height: 1.6; }
+.ap-review h3 { margin: 0 0 4px; font-size: 14px; }
+.ap-review ol { margin: 0; padding-left: 28px; }
+.app-shell.demo-running .ap-answer-panel { pointer-events: none; }

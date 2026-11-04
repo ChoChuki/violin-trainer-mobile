@@ -202,6 +202,12 @@ const elements = {
     minIntervalSelect: document.getElementById("minIntervalSelect"),
     directionSelect: document.getElementById("directionSelect"),
     intervalPicker: document.getElementById("intervalPicker"),
+    apPicker: document.getElementById("apPicker"),
+    apTrialsSelect: document.getElementById("apTrialsSelect"),
+    apTimeSelect: document.getElementById("apTimeSelect"),
+    apAnswerPanel: document.getElementById("apAnswerPanel"),
+    apAnswers: document.getElementById("apAnswers"),
+    apReview: document.getElementById("apReview"),
     instrumentSelect: document.getElementById("instrumentSelect"),
     applyButton: document.getElementById("applyButton"),
     playButton: document.getElementById("playButton"),
@@ -327,6 +333,7 @@ function setLanguage(language) {
     const labels = {
         languageLabel: "language", fromLabel: "from", toLabel: "to",
         keyLabel: "key", clefLabel: "clef", modeLabel: "mode", maxIntervalLabel: "maxInterval", minIntervalLabel: "minInterval", targetDirectionLabel: "targetDirection", applyButton: "apply",
+        apTrialsLabel: "apTrials", apTimeLabel: "apTime", apDescription: "apDescription",
         playButton: "play", nextButton: "next", demoButton: "demo", helpText: "hint"
     };
     for (const [id, key] of Object.entries(labels)) {
@@ -341,6 +348,9 @@ function setLanguage(language) {
         option.textContent = t(option.value);
     }
     elements.maxIntervalSelect.options[0].textContent = t("unlimited");
+    elements.apTimeSelect.options[0].textContent = t("apSeconds");
+    elements.apTimeSelect.options[1].textContent = t("apTwoSeconds");
+    elements.apTimeSelect.options[2].textContent = t("apUnlimited");
     for (const option of elements.directionSelect.options) {
         option.textContent = t(`direction${option.value.charAt(0).toUpperCase()}${option.value.slice(1)}`);
     }
@@ -366,22 +376,22 @@ function setLanguage(language) {
     if (ready) {
         if (!testActive && activePointers.size > 0) {
             renderHeldNotes();
-        } else if (testActive && answered && currentMidi !== null) {
+        } else if (testMode !== "ap" && testActive && answered && currentMidi !== null) {
             setAnswer("raw", { text: formatAnswerText() });
         }
     }
     if (typeof drawStaff === "function" && !demoRunning) {
         if (!testActive && activePointers.size > 0) {
             drawStaff([...new Set(activePointers.values())]);
-        } else if (answered && currentMidi !== null) {
+        } else if (testMode !== "ap" && answered && currentMidi !== null) {
             drawAnsweredStaff();
         } else {
             drawQuestionStaff();
         }
     }
     updateStaffReplayAccess();
+    updateApView();
 }
-
 function noteName(midi) {
     const octave = Math.floor(midi / 12) - 1;
     return `${PITCH_NAMES[midi % 12]}${octave}`;
@@ -1118,6 +1128,8 @@ function setControlsEnabled(enabled) {
     elements.maxIntervalSelect.disabled = !enabled;
     elements.minIntervalSelect.disabled = !enabled;
     elements.directionSelect.disabled = !enabled;
+    elements.apTrialsSelect.disabled = !enabled;
+    elements.apTimeSelect.disabled = !enabled;
     elements.modeSelect.disabled = !enabled;
     elements.instrumentSelect.disabled = !enabled;
     document.getElementById("demoButton").disabled = !enabled;
@@ -1301,6 +1313,179 @@ async function playTone(midi) {
     );
 }
 
+// Absolute-pitch assessment: chroma-only responses, delayed feedback, octave-spanning
+// trials and optional timed responses. Kept separate from legacy practice and Demo audio.
+const AP_PITCH_LABELS = ["C", "C\u266f/D\u266d", "D", "D\u266f/E\u266d", "E", "F",
+    "F\u266f/G\u266d", "G", "G\u266f/A\u266d", "A", "A\u266f/B\u266d", "B"];
+let apSession = null; // {records, total, limitMs, finished}
+let apTimer = null;
+let apDeadline = null;
+let apAudioReady = false;
+
+function clearApTimer() {
+    window.clearTimeout(apTimer);
+    apTimer = null;
+    apDeadline = null;
+}
+
+function apEligiblePitches(from = minMidi, to = maxMidi) {
+    if (to - from < 24) return [];
+    const all = Array.from({length: to - from + 1}, (_, index) => from + index);
+    // Every eligible pitch has an alternative over an octave away with a
+    // *different pitch class*. This avoids forced same-name octave comparisons.
+    return all.filter((pitch) => all.some((other) =>
+        Math.abs(other - pitch) >= 13 && other % 12 !== pitch % 12));
+}
+
+function pickApPitch(previous = null) {
+    const eligible = apEligiblePitches();
+    let choices = previous === null ? eligible : eligible.filter((midi) =>
+        Math.abs(midi - previous) >= 13 && midi % 12 !== previous % 12);
+    // Every eligible previous note has at least one valid next note.
+    if (!choices.length) return null;
+    return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function updateApView() {
+    const isAp = testMode === "ap" && !demoRunning;
+    document.querySelector(".app-shell").classList.toggle("ap-mode", isAp);
+    document.querySelector(".app-shell").classList.toggle("ap-complete", Boolean(isAp && apSession?.finished));
+    elements.apAnswerPanel.hidden = !isAp;
+    elements.apAnswers.querySelectorAll("button").forEach((button) => {
+        button.disabled = !ready || !testActive || answered || !apAudioReady || !isAp;
+    });
+    if (ready) {
+        elements.nextButton.disabled = isAp && (!testActive || !answered || apSession?.finished);
+    }
+    if (isAp) {
+        elements.apReview.hidden = !apSession?.finished;
+        if (apSession?.finished) renderApResults();
+        else elements.apReview.replaceChildren();
+    }
+}
+
+function renderApResults() {
+    if (!apSession?.finished) return;
+    const results = elements.apReview;
+    results.replaceChildren();
+    const heading = document.createElement("h3");
+    heading.textContent = t("apReview");
+    results.appendChild(heading);
+    const list = document.createElement("ol");
+    for (const result of apSession.records) {
+        const item = document.createElement("li");
+        const correct = result.guess !== null && result.guess === result.pitch % 12;
+        const label = result.guess === null ? t("apResultMiss")
+            : t(correct ? "apResultCorrect" : "apResultWrong");
+        const picked = result.guess === null ? t("apEmpty") : AP_PITCH_LABELS[result.guess];
+        item.textContent = `${label} \u00b7 ${t("apTarget")}: ${noteName(result.pitch)} \u00b7 ${t("apPicked")}: ${picked}`;
+        list.appendChild(item);
+    }
+    results.appendChild(list);
+}
+
+function finishApRound() {
+    if (!apSession || apSession.finished) return;
+    clearApTimer();
+    apSession.finished = true;
+    testActive = false;
+    answered = true;
+    currentMidi = null;
+    questionSerial += 1;
+    apAudioReady = false;
+    player.cancelQueue(audioContext);
+    const score = apSession.records.filter((item) => item.guess === item.pitch % 12).length;
+    setStatus("apSummary", {score, total: apSession.total});
+    setAnswer("apSummary", {score, total: apSession.total});
+    drawStaff();
+    updatePlayButton();
+    updateApView();
+}
+
+function recordApAnswer(guess = null) {
+    if (testMode !== "ap" || !apSession || apSession.finished || !testActive || answered) return;
+    clearApTimer();
+    apSession.records.push({pitch: currentMidi, guess});
+    answered = true;
+    apAudioReady = false;
+    questionSerial += 1;
+    player.cancelQueue(audioContext);
+    resetKeyboardColors();
+    drawStaff(); // Never show the target before the full round ends.
+    if (apSession.records.length >= apSession.total) {
+        finishApRound();
+        return;
+    }
+    setStatus(guess === null ? "apTimedOut" : "apRecorded");
+    setAnswer(guess === null ? "apTimedOut" : "apRecorded");
+    updateApView();
+}
+
+async function playApPitch(midi, serial) {
+    await ensureAudio();
+    if (serial !== questionSerial || !testActive || testMode !== "ap" ||
+        currentMidi !== midi || !apSession || apSession.finished) return;
+    player.cancelQueue(audioContext);
+    player.queueWaveTable(audioContext, audioContext.destination,
+        selectedPreset(), 0, midi, PLAY_DURATION, 0.75);
+    apAudioReady = true;
+    if (apSession.limitMs !== null) {
+        apDeadline = Date.now() + apSession.limitMs;
+        apTimer = window.setTimeout(() => recordApAnswer(null), apSession.limitMs);
+    }
+    updateApView();
+}
+
+function startApQuestion() {
+    if (!apSession || apSession.finished) {
+        apSession = {records: [], total: Number(elements.apTrialsSelect.value),
+            limitMs: elements.apTimeSelect.value === "none" ? null
+                : Number(elements.apTimeSelect.value) * 1000, finished: false};
+    }
+    if (testActive && !answered) return; // Next never skips an unanswered question.
+    clearApTimer();
+    const previous = apSession.records.length
+        ? apSession.records[apSession.records.length - 1].pitch : lastQuestionMidi;
+    const target = pickApPitch(previous) ?? pickApPitch();
+    if (target === null) {
+        setStatus("apNeedRange");
+        return;
+    }
+    releaseAllKeys();
+    window.clearTimeout(freeDisplayTimeout);
+    player.cancelQueue(audioContext);
+    resetKeyboardColors();
+    currentMidi = target;
+    currentReferenceMidi = null;
+    lastQuestionMidi = target;
+    testActive = true;
+    answered = false;
+    apAudioReady = false;
+    questionSerial += 1;
+    const serial = questionSerial;
+    updatePlayButton();
+    setStatus("apListen", {index: apSession.records.length + 1, total: apSession.total});
+    setAnswer("apChoose");
+    drawStaff(null, true);
+    updateStaffReplayAccess();
+    updateApView();
+    playApPitch(target, serial).catch(() => { if (serial === questionSerial) recordApAnswer(null); });
+}
+
+function createApAnswerButtons() {
+    const container = elements.apAnswers;
+    for (let pitch = 0; pitch < 12; pitch += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary ap-note-button";
+        button.textContent = AP_PITCH_LABELS[pitch];
+        button.dataset.pitchClass = String(pitch);
+        button.disabled = true;
+        button.addEventListener("click", unlessDemo(() => recordApAnswer(pitch)));
+        container.appendChild(button);
+    }
+}
+
 function updatePlayButton() {
     elements.playButton.textContent = t(testActive ? "stop" : "play");
     elements.playButton.classList.toggle("danger", testActive);
@@ -1310,6 +1495,7 @@ function updatePlayButton() {
 function updateIntervalPickerVisibility() {
     const visible = elements.modeSelect.value === "interval";
     elements.intervalPicker.hidden = !visible;
+    elements.apPicker.hidden = elements.modeSelect.value !== "ap";
 }
 
 function intervalTargetPools(from, to, minDistance, maxDistance, direction, excludedTarget = null) {
@@ -1346,6 +1532,7 @@ function pickIntervalQuestion() {
 
 function newQuestion() {
     if (!ready) return;
+    if (testMode === "ap") { startApQuestion(); return; }
     releaseAllKeys();
     window.clearTimeout(freeDisplayTimeout);
     resetKeyboardColors();
@@ -1394,6 +1581,9 @@ function newQuestion() {
 }
 
 function stopTest() {
+    clearApTimer();
+    apSession = null;
+    apAudioReady = false;
     if (!ready) {
         return;
     }
@@ -1412,7 +1602,8 @@ function stopTest() {
     drawStaff();
 
     setStatus("stopped");
-    setAnswer("free");
+    setAnswer(testMode === "ap" ? "apStart" : "free");
+    updateApView();
 }
 
 function freePlay(midi, pointerId) {
@@ -1470,6 +1661,7 @@ function answer(selectedMidi) {
 }
 
 function pressKey(midi, pointerId) {
+    if (testMode === "ap" && !demoRunning) return; // Never play a reference note in the assessment.
     if (!ready) {
         return;
     }
@@ -1522,6 +1714,10 @@ function applySettings() {
         setStatus("distinctRangeError");
         return;
     }
+    if (elements.modeSelect.value === "ap" && apEligiblePitches(startMidi, endMidi).length < 2) {
+        setStatus("apNeedRange");
+        return;
+    }
     if (elements.modeSelect.value === "interval") {
         const minDistance = Number(elements.minIntervalSelect.value);
         const maxDistance = elements.maxIntervalSelect.value === "unlimited"
@@ -1550,6 +1746,9 @@ function applySettings() {
     keyName = elements.keySelect.value;
     clefMode = elements.clefSelect.value;
     testMode = elements.modeSelect.value;
+    clearApTimer();
+    apSession = null;
+    apAudioReady = false;
     maxIntervalSemitones = elements.maxIntervalSelect.value === "unlimited"
         ? null : Number(elements.maxIntervalSelect.value);
     minIntervalSemitones = Number(elements.minIntervalSelect.value);
@@ -1574,7 +1773,8 @@ function applySettings() {
         from: noteName(minMidi), to: noteName(maxMidi),
         key: keySignatureLabel(keyName), clef: t(clefMode.toLowerCase())
     });
-    setAnswer("free");
+    setAnswer(testMode === "ap" ? "apStart" : "free");
+    updateApView();
 }
 
 function populateSelectors() {
@@ -1640,6 +1840,7 @@ function initializeAudio() {
         setStatus("ready");
         setAnswer("free");
         document.getElementById("demoButton").disabled = false;
+        updateApView();
     }).catch(() => {
         setStatus("audioError");
     });
@@ -1683,6 +1884,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("blur", releaseAllKeys);
 
 populateSelectors();
+createApAnswerButtons();
 updateIntervalPickerVisibility();
 setLanguage(resolveInitialLanguage());
 drawKeyboard();
@@ -1993,9 +2195,14 @@ function captureDemoSnapshot() {
             maxIntervalSelect: elements.maxIntervalSelect.value,
             minIntervalSelect: elements.minIntervalSelect.value,
             directionSelect: elements.directionSelect.value,
+            apTrialsSelect: elements.apTrialsSelect.value,
+            apTimeSelect: elements.apTimeSelect.value,
             instrumentSelect: elements.instrumentSelect.value
         },
         state: { testActive, answered, currentMidi, currentReferenceMidi },
+        ap: {session: apSession ? { ...apSession, records: apSession.records.map((entry) => ({...entry})) } : null,
+            remainingMs: apDeadline === null ? null : Math.max(0, apDeadline - Date.now()),
+            audioReady: apAudioReady},
         status: { ...statusMessage },
         answer: { ...answerMessage },
         keyClasses: [...keyElements.entries()].map(([midi, element]) => ({
@@ -2029,12 +2236,21 @@ function restoreDemoSnapshot(snapshot) {
     elements.maxIntervalSelect.value = form.maxIntervalSelect;
     elements.minIntervalSelect.value = form.minIntervalSelect;
     elements.directionSelect.value = form.directionSelect;
+    elements.apTrialsSelect.value = form.apTrialsSelect;
+    elements.apTimeSelect.value = form.apTimeSelect;
     updateIntervalPickerVisibility();
     elements.instrumentSelect.value = form.instrumentSelect;
     testActive = state.testActive;
     answered = state.answered;
     currentMidi = state.currentMidi;
     currentReferenceMidi = state.currentReferenceMidi;
+    apSession = snapshot.ap.session;
+    apAudioReady = snapshot.ap.audioReady;
+    if (apSession && testMode === "ap" && testActive && !answered && snapshot.ap.remainingMs !== null) {
+        const remaining = Math.max(1, snapshot.ap.remainingMs);
+        apDeadline = Date.now() + remaining;
+        apTimer = window.setTimeout(() => recordApAnswer(null), remaining);
+    }
     questionSerial += 1;
     updatePlayButton();
     updateStaffReplayAccess();
@@ -2044,13 +2260,14 @@ function restoreDemoSnapshot(snapshot) {
         const key = keyElements.get(midi);
         if (key) classNames.forEach((name) => markPitch(midi, name));
     });
-    if (testActive && currentMidi !== null && answered) {
+    if (testMode !== "ap" && testActive && currentMidi !== null && answered) {
         drawAnsweredStaff();
     } else {
         drawQuestionStaff();
     }
     setStatus(snapshot.status.key, snapshot.status.args);
     setAnswer(snapshot.answer.key, snapshot.answer.args);
+    updateApView();
     elements.keyboardScroller.scrollTo({ left: snapshot.keyboardScrollLeft, behavior: "instant" });
     window.scrollTo({ top: snapshot.pageScrollY, behavior: "instant" });
 }
@@ -2058,8 +2275,10 @@ function restoreDemoSnapshot(snapshot) {
 async function runDemo() {
     if (!ready || demoRunning) return;
     const snapshot = captureDemoSnapshot();
+    clearApTimer();
     demoRunning = true;
     demoCancelled = false;
+    document.querySelector(".app-shell").classList.remove("ap-mode");
     document.querySelector(".app-shell").classList.add("demo-running");
     setDemoControlsLocked(true);
 
