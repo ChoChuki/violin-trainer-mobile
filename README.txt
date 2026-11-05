@@ -1,104 +1,91 @@
-Violin Ear Trainer v2.2.4 — added Absolute Pitch assessment mode
+Violin Ear Trainer v2.2.6 — Absolute-pitch learning + cold-start checks + optional training-time sync
 
-Based on the complete preceding v18.3 / v2.2.3 source archive, with no refactoring.
-The Mode selector now offers a third, strictly optional Absolute pitch mode alongside
-unchanged Single note and Two notes. Default Mode remains Single note.
+BASELINE
+Violin Ear Trainer v2.2.5 complete source ZIP, NOT reconstructed from chat.
+Piano and violin remain two independent static PWAs / Cloudflare Workers projects.
+Original Single note, Two notes, free play, six languages, clefs, key signatures,
+Demo, touch interactions and 0.7-second single-note timing are retained.
 
-Absolute pitch mode:
-- 12 or 20 questions per round; 5s default limit, optional 2s or untimed.
-- Only one isolated note is sounded per question; no reference/replay/correct-note audio.
-- A minimum 24-semitone From/To span is required. Consecutive targets differ by
-  >12 semitones AND by pitch class; target generation uses finite eligible pools.
-- Answer via one of 12 note-name buttons, ignoring octave to test pitch chroma.
-- Suppress correctness, pitch-name and staff feedback until the full round ends.
-  Do not play instrument keys in this mode, since that would give a reference pitch.
-- Next remains a manual action after an answer or timeout. On finishing, show
-  per-question answers and total score; Stop Test cancels the round.
-- Demo starts/restores the previous mode, settings, and current test state.
-- All six interface languages and independent Service Worker cache versions are updated.
+AP SCIENCE / GATE v2 (updated after independent A/B review)
+- The two applications remain independent, including their course progress and
+  trial records. Historical data and training-time records are NOT cleared.
+- Critical security-of-measurement fix: AP learning and AP cold check draw
+  each class independently, allow repeated note names, and equalize octaves.
+  No forced alternation or search rewarding long adjacent jumps is used.
+- AP cold checks: fixed C4-B5, 24 notes in two complete octaves (endpoint
+  distance 23 semitones), both instruments. Thirty questions, 5s response.
+  Written confirmations cover the other trainer, tuning/playing and known
+  pitch music within the prior four hours. These remain SELF-REPORTED.
+- To count for promotion: first self-confirmed check of the local Japan day,
+  at least four hours after this site's last recorded pitch activity, no
+  loss of focus or hidden page, 27/30 or better, and at least 80% accuracy
+  separately on trained and Other categories (where present).
+- Promotion needs TWO CONSECUTIVE eligible-day passes, and at least ten
+  trials for the newest note with >=80% correct, plus four Other trials with
+  >=80% correct (within seven days). Evidence requirements are experimental
+  product criteria, NOT scientifically validated AP thresholds.
+- An interrupted/abandoned qualifying cold check counts as a failed day;
+  later retries that day are practice-only. Prior vulnerable gate passes are
+  archived as legacyGatePasses and NOT reused for promotion. Unlocked levels
+  and older stored results remain available.
+- Cold answer lists may optionally be hidden after completion and revealed
+  later, allowing back-to-back piano/violin checks without instant labels.
+- AP learning keeps 12-question immediate feedback and now plays labelled
+  feedback for timeout and the final question too. Optional pitch sweep is
+  OFF by default. This is learning, not promotion evidence.
+- AP informal assessment 12/20 trials uses independent pitch classes; 36/48
+  uses per-name and octave-balanced quotas. No fixed >12-semitone jump is
+  promised, because the old optimiser created serious sequence clues.
+- Trial CSV includes pointer event timing, output-device self-report,
+  latency estimates, hidden counts and the selected distractor option.
+  These timestamps are NOT an acoustic-onset measurement for Bluetooth.
+- From/To, clefs and other older Single/Two note/free play controls remain
+  available. Demo note events and schedules are byte-identical to v18.5 or
+  v2.2.5. All six locales include the new AP labels.
+- The training-time backend from the previous delivery is unchanged. Cloud
+  sync still requires a separately configured Worker; local time survives
+  updates. No external tonal samples were added (source licensing and
+  timbral verification remain future work).
 
-Original Single note, Two notes, unrestricted free playing, demo-score.js events,
-0.7s ordinary single-note audio, interval 0.6s/0.9s audio and held-key timing
-are preserved. This mode reduces reliance on relative-pitch strategies but cannot
-prove that all relative-pitch strategies have been eliminated.
+TRAINING TIME (OPTIONAL)
+- Both sites include the same training-tracker.js. It counts only meaningful
+  question/answer/free-play actions, pauses after 75 seconds without activity
+  and when the tab is hidden or loses focus. Tokyo day boundaries are respected.
+- Offline local segments survive refreshes/updates. Cloud sync is NOT automatic:
+  a separate shared Cloudflare Worker + D1 must first be deployed, then both
+  sites/devices configured with its URL and the same 128-bit pairing code.
+- The shared backend, plugin API contract and setup guide are delivered in
+  Musik_Training_Sync_Worker_v1.zip. DO NOT deploy backend files as static assets.
+- The existing Chrome reminder extension's source was NOT supplied; its old
+  reminder logic is not modified here. The plugin developer must switch to the
+  shared API and stop independent time-counting to avoid double counting.
 
-To deploy, extract this version's _site.zip and upload its NINE site files to the
-EXISTING appropriate Cloudflare Worker, with index.html at the root.
-Never upload the piano ZIP to the violin Worker, or vice versa.
+FILES MODIFIED OR ADDED
+app.js, index.html, i18n.js, styles.css, service-worker.js,
+ap-science.js (new), training-tracker.js (new), this README, verification tools.
+manifest.webmanifest and both demo-score.js files were not altered.
 
-Evidence: Wong et al. (2025), Psychonomic Bulletin & Review,
-DOI: 10.3758/s13423-024-02620-2. The paper includes restricted-feedback
-assessment, octave-spanning adjacent test tones, chroma generalization and
-response time windows. Our implementation is not a reproduction of their full
-8-week training curriculum.
+DEPLOYMENT
+Unzip the **site** package. Upload the root-level index.html and assets to the
+EXISTING Cloudflare Worker for this exact instrument. Do not create a new piano
+or violin Worker, do not mix the packages, and do not add a parent folder.
+Cache revision: violin-ear-trainer-v2.2.6.
 
---- Previous release notes ---
+VERIFICATION
+- JavaScript syntax: node --check for all site JS files.
+- tools/test_ap_curriculum.py: Playwright simulated 360x667 and 390x844,
+  complete 12-question learning, 30-question cold check, 48-note balanced test,
+  new intervals, six translations and on-screen bounds.
+- tools/test_quiz_rules.py, tools/test_interval_refinement.py: old quiz rules.
+- tools/test_training_clock.js: Node simulated idle, Tokyo midnight and reload.
+- Demo file byte SHA-256 compared with previous stable complete source.
+- For piano tools/test_score.js checks all 59 vocal melody events.
+- Legacy absolute-pitch test is preserved as *legacy* but its prior 13-semitone
+  hard constraint and 12-button assertion no longer describe the new design.
 
-Violin Ear Trainer v2.2.3 — Two notes: minimum/maximum interval and target direction
-
-New in this release:
-- Min interval: 1–24 semitones (default 1); Max interval unchanged: 1–24 or Unlimited (default Unlimited).
-- Target direction: Higher, Lower, or Both (random; default Both).
-- Both reference and target remain inside From/To and respect the chosen interval limits.
-- Reject impossible combinations and settings that yield only one target pitch (non-repeat rule).
-- Two-note settings are isolated from Single note and restored after Demo, including pending form edits.
-- No changes to either music Demo, 0.7s listening tone, or free-play timing.
-
-New release: violin-v2.2.2 — non-repeating targets and user-selectable maximum two-note interval
-
-Based on the user-provided violin-v2.2.1 source package. All original demo-score.js events and demo audio
-scheduling remain unchanged. The ordinary 0.7-second single-note audition remains unchanged.
-
-- Single note: each new quiz target excludes the previous real quiz target (exact MIDI pitch).
-- Two notes: the target likewise never equals the previous real quiz target. The two pitches
-  must be different and must both lie inside the original From/To range.
-- Two notes: Max interval select offers Unlimited (default) or any 1–24 semitones.
-  A numeric limit applies to the absolute semitone distance, up or down.
-- At least two pitches in From/To are required for any quiz, otherwise a translated error
-  appears at Apply. This avoids impossible no-repeat single-pitch quiz ranges.
-- Next, not a timer, advances to the next question. The previous real target remains
-  remembered over Stop/Apply; the prerecorded scripted Demo does not alter it.
-- The new setting is applied by pressing Apply; its selector is visible only when the
-  form's Mode is Two notes. The Demo snapshot restores both applied and un-applied settings.
-- Piano and Violin are separate PWAs, with separate caches and upload destinations.
-
-Cloudflare Worker static assets: use the _site.zip, extract its nine website files
-into the EXISTING respective Worker and Deploy. Do not overwrite the other app.
-
-Violin Ear Trainer v2.2.1 — standalone PWA (NOT a Piano/Violin toggle)
-
-Contents: full parity with Pitch Trainer Mobile v18: language selection (six locales),
-From/To, Key, Clef, Single note / Two notes, Apply, Play / Stop Test, Next,
-free play, music staff, note/solfege feedback, repeat by tapping the staff,
-reference pitch highlight, demo rehearsal, and restored settings after Demo.
-
-Only the playing surface and sound differ: 4 violin strings (G3 D4 A4 E5),
-positions 0-12 semitones from open string, WebAudioFont violin #0400.
-Positions are SEMITONE OFFSETS, not finger numbers or physically proportional spacing.
-Playable range G3-E6; use Treble clef as normal violin default.
-
-Demo: same single-note and two-note practice tour, then Beethoven's
-Violin Concerto in D major, Op.61, III (Rondo), first 8 bars plus one-eighth pickup, ending on D4; removes the following A–E–F#–G–E tail.
-Solo violin part only (no fabricated orchestration), 132 quarter-note BPM.
-Source: https://github.com/MutopiaProject/MutopiaProject/blob/master/ftp/BeethovenLv/O61/violin_concerto_3/violin_concerto_3-lys/violinoprincipale.ly
-Mutopia #1165, original published score, public-domain edition.
-
-Deployment: Create a NEW Cloudflare Worker static-assets site; do not upload
-this into the existing Pitch Trainer Worker. Keep index.html at upload root.
-First start requires internet for WebAudioFont and violin soundfont.
-Cache name violin-ear-trainer-v2.2.1, separate from piano PWA.
-
-Training surface: each fingerboard touch target is intentionally unlabelled (neutral dot), with no pitch names or numeric offsets. The four open strings remain identified; target pitch is revealed in feedback after answering. Accessible touch target labels say string and position, not the answer pitch.
-
-
-v2.2.1 patch (based on v2.2, NOT v2.3):
-- Reduced single-note tap/replay duration from 1.4 s to 0.7 s.
-- Preserved fingerboard, existing 0-4 / 5-8 / 9-12 navigation, and all quiz logic.
-- Preserved two-note quiz sequence (reference 0.6 s, target 0.9 s), free-play hold/release, and complete Beethoven Op.61 Demo timing and events.
-- Rotated service-worker cache key so the deployed PWA can pick up the new JavaScript.
-
-To update an existing deployed Violin Worker, upload all nine web assets in the site ZIP to the SAME Worker (not the Piano Worker). Reload the installed app after deployment.
-
-Absolute-pitch assessment mode: 12/20-trial batches; feedback only after the round;
->12 semitone adjacent jumps; 12 chroma answers across octaves; optional 5s/2s/untimed.
-Existing Single / Two notes / Demo are unchanged except for mode integration.
+LIMITATIONS
+Simulated audio calls do not establish real phone touch/audio latency or sound.
+Cloudflare live Worker+D1 sync, cloud interruptions, external Bluetooth output,
+true cross-day learning outcomes, multiple timbres and actual Chrome extension
+integration have NOT been verified. Test these before treating the progress as a
+rigorous measure of absolute-pitch learning.

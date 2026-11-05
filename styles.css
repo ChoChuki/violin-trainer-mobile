@@ -199,3 +199,25 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .ap-review h3 { margin: 0 0 4px; font-size: 14px; }
 .ap-review ol { margin: 0; padding-left: 28px; }
 .app-shell.demo-running .ap-answer-panel { pointer-events: none; }
+
+/* New AP learning/cold-check UI; other modes retain their original layout. */
+.ap-configuration { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:7px; }
+.ap-configuration[hidden], .ap-course-info[hidden], .ap-opt[hidden], .ap-note-button[hidden] { display:none!important; }
+.ap-course-info { grid-column:1/-1; display:grid; gap:5px; background:#f1f5f9; padding:8px; border-radius:10px; }
+.ap-course-info p { margin:0; font-size:12px; line-height:1.5; }
+.ap-opt { display:flex; align-items:flex-start; gap:7px; font-size:12px; line-height:1.5; }
+.ap-opt input { margin-top:2px; flex-shrink:0; }
+.ap-history-panel { margin:7px 0; padding:8px; border:1px solid #e5e7eb; background:#fff; border-radius:12px; font-size:12px; }
+.ap-history-panel summary { font-weight:700; cursor:pointer; }
+.ap-history-panel p { margin:4px 0; }
+.ap-history-panel button { margin-top:6px; }
+
+.tracker-strip{margin:5px 0;padding:6px 10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:11px;line-height:1.5}
+.tracker-strip p{margin:2px 0}
+.tracker-config summary{cursor:pointer;color:#374151;font-size:11px}
+.tracker-config label{display:grid;gap:3px;margin:5px 0}
+.tracker-config input{width:100%;min-width:0;box-sizing:border-box;padding:7px;font-size:12px}
+.tracker-buttons{display:flex;gap:5px;flex-wrap:wrap}
+.tracker-buttons button{font-size:11px;min-height:32px}
+
+.tracker-history{margin-top:7px;padding-top:5px;border-top:1px solid #e5e7eb;font-size:11px;color:#475569}

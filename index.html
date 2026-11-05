@@ -65,6 +65,8 @@
                         <option value="single">Single note</option>
                         <option value="interval">Two notes</option>
                         <option value="ap">Absolute pitch</option>
+                        <option value="apLearn">AP learning</option>
+                        <option value="apCold">AP cold check</option>
                     </select>
                 </label>
                 <button id="applyButton" class="secondary" disabled>Apply</button>
@@ -87,14 +89,30 @@
                     </label>
                 </div>
                 <div class="ap-settings" id="apPicker" hidden>
+                    <div id="apAssessmentOptions" class="ap-configuration">
                     <label class="ap-picker" for="apTrialsSelect">
                         <span id="apTrialsLabel">Questions per round</span>
-                        <select id="apTrialsSelect"><option value="12">12</option><option value="20">20</option></select>
+                        <select id="apTrialsSelect"><option value="12">12</option><option value="20">20</option><option value="36">36</option><option value="48">48</option></select>
                     </label>
                     <label class="ap-picker" for="apTimeSelect">
                         <span id="apTimeLabel">Response limit</span>
                         <select id="apTimeSelect"><option value="5">5 seconds</option><option value="2">2 seconds</option><option value="none">No limit</option></select>
                     </label>
+                    </div>
+                    <div class="ap-course-info" id="apCourseInfo" hidden>
+                        <p id="apCourseLevel"></p>
+                        <p id="apCourseDescription"></p>
+                        <div id="apColdConfirmation" class="ap-cold-confirm" hidden>
+                            <p class="ap-description" id="apColdRangeText"></p>
+                            <label class="ap-opt"><input id="apColdCheck" type="checkbox"><span id="apColdConfirmText"></span></label>
+                            <label class="ap-opt"><input id="apColdMusicCheck" type="checkbox"><span id="apColdMusicText"></span></label>
+                            <label class="ap-picker" for="apColdDevice"><span id="apColdDeviceLabel"></span>
+                                <select id="apColdDevice"><option value="speaker">Speaker</option><option value="wired">Wired headphones</option><option value="bluetooth">Bluetooth</option><option value="other">Other/unknown</option></select>
+                            </label>
+                            <label class="ap-opt"><input id="apHideColdCheck" type="checkbox"><span id="apHideColdText"></span></label>
+                        </div>
+                        <label class="ap-opt" id="apResetOption" hidden><input id="apResetCheck" type="checkbox"><span id="apResetText"></span></label>
+                    </div>
                     <p id="apDescription" class="ap-description">No feedback until the round ends · jumps over 1 octave · answer by note name</p>
                 </div>
             </div>
@@ -109,6 +127,31 @@
         <section class="ap-answer-panel" id="apAnswerPanel" hidden>
             <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
             <div id="apReview" class="ap-review" hidden></div>
+        </section>
+
+        <details class="ap-history-panel" id="apHistoryPanel">
+            <summary id="apProgressTitle">AP progress</summary>
+            <div id="apRecentHistory"></div>
+            <button type="button" class="secondary" id="apExportButton">Export trial CSV</button>
+        </details>
+
+        <section class="tracker-strip" aria-label="Training time">
+            <p id="trackerStatus">今日有效训练 0/60 分钟 · 仅本机，未同步</p>
+            <details class="tracker-config">
+                <summary><span id="trackerSettingTitle">训练时间同步设置</span> <span id="trackerSync"></span></summary>
+                <label><span id="trackerEndpointLabel">Cloudflare 同步 Worker HTTPS 地址</span>
+                    <input id="trackerEndpoint" type="url" placeholder="https://your-sync-worker.workers.dev" autocomplete="off">
+                </label>
+                <label><span id="trackerKeyLabel">个人配对码（不同网站和设备须完全相同）</span>
+                    <input id="trackerKey" type="text" maxlength="32" autocomplete="off" spellcheck="false">
+                </label>
+                <div class="tracker-buttons">
+                    <button type="button" id="trackerSave" class="secondary">保存同步设置</button>
+                    <button type="button" id="trackerCopy" class="secondary">复制配对码</button>
+                </div>
+                <div id="trackerHistory" class="tracker-history"></div>
+                <p id="trackerConfigMessage">未配置云端前，两个网站与设备的进度不能合并。</p>
+            </details>
         </section>
 
         <section class="answer-card">
@@ -128,6 +171,8 @@
     <script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
     <script src="./i18n.js"></script>
     <script src="./demo-score.js"></script>
+    <script src="./ap-science.js"></script>
+    <script src="./training-tracker.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>

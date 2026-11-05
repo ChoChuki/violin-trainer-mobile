@@ -1,6 +1,6 @@
-const CACHE_NAME = "violin-ear-trainer-v2.2.4";
+const CACHE_NAME = "violin-ear-trainer-v2.2.6";
 const ASSETS = [
-    "./", "./index.html", "./styles.css", "./app.js", "./i18n.js", "./demo-score.js",
+    "./", "./index.html", "./styles.css", "./app.js", "./i18n.js", "./demo-score.js", "./ap-science.js", "./training-tracker.js",
     "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"
 ];
 const EXTERNAL = [
@@ -33,6 +33,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+    if (!event.request.url.startsWith(self.registration.scope)) return;
     if (event.request.method !== "GET") {
         return;
     }
