@@ -1,6 +1,6 @@
-const CACHE_NAME = "violin-ear-trainer-v2.2.6";
+const CACHE_NAME = "violin-ear-trainer-v2.2.9";
 const ASSETS = [
-    "./", "./index.html", "./styles.css", "./app.js", "./i18n.js", "./demo-score.js", "./ap-science.js", "./training-tracker.js",
+    "./", "./index.html", "./styles.css", "./app.js", "./i18n.js", "./demo-score.js", "./ap-science.js", "./ap-memory.js", "./relative-course.js", "./relative-ui.js", "./training-tracker.js",
     "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"
 ];
 const EXTERNAL = [

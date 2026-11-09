@@ -38,55 +38,73 @@
     // For longer assessments, balance pitch classes and octave placements.
     // Never reorder the sequence to maximise jumps: the old objective leaked
     // "F/Other" via an almost perfect alternation of question categories.
-    function makeSequence({from, to, total, known = null}) {
-        if (!Number.isInteger(from) || !Number.isInteger(to) || to < from || total < 1) return [];
+    function makeSequence({from, to, total, known = null, previousMidi = null, knownWeights = null}) {
+        if (!Number.isInteger(from) || !Number.isInteger(to) || to < from ||
+            !Number.isInteger(total) || total < 1) return [];
         const inRange = Array.from({length: to - from + 1}, (_, i) => from + i);
         const available = [...new Set(inRange.map(p => p % 12))];
         const active = known === null ? available : known.filter(c => available.includes(c));
         const outside = known === null ? [] : boundaries(active).filter(c => available.includes(c));
         if (!active.length || (known !== null && active.length < 12 && !outside.length)) return [];
         const pools = new Map(available.map(c => [c, inRange.filter(p => p % 12 === c)]));
-        // Equalize the available octave set across the categories in a course.
-        // F4/F5 vs D#3/D#4/D#5 would otherwise leak "Other" by register.
+        // For course training, all answer classes share the same octave choices.
+        // Otherwise a high/low register could itself reveal 'Other'.
         if (known !== null) {
             const classes = active.concat(outside);
-            const octaveSets = classes.map(c => new Set(pools.get(c).map(m => Math.floor(m / 12) - 1)));
-            const commonOctaves = [...octaveSets[0]].filter(o => octaveSets.every(set => set.has(o)));
-            if (commonOctaves.length < 2) return [];
+            const octaves = classes.map(c => new Set(pools.get(c).map(m => Math.floor(m / 12) - 1)));
+            const common = [...octaves[0]].filter(o => octaves.every(set => set.has(o)));
+            if (common.length < 2) return [];
             for (const c of classes) {
-                pools.set(c, pools.get(c).filter(m => commonOctaves.includes(Math.floor(m / 12) - 1)));
+                pools.set(c, pools.get(c).filter(m => common.includes(Math.floor(m / 12) - 1)));
             }
         }
-        const result = [];
         if (known !== null || total < 36) {
-            const pKnown = outside.length ? Math.max(0.5, active.length / (active.length + outside.length)) : 1;
+            // Categories must be chosen independently. Never prohibit adjacent
+            // copies of a note *name*: it would recreate the F/Other alternating
+            // sequence leak. Only exclude an identical MIDI target.
+            const pKnown = outside.length ? Math.max(.5, active.length / (active.length + outside.length)) : 1;
+            const result = [];
+            let previous = previousMidi;
             for (let i = 0; i < total; i++) {
                 const classes = outside.length && Math.random() >= pKnown ? outside : active;
-                const c = classes[rand(classes.length)];
-                const options = pools.get(c);
-                result.push(options[rand(options.length)]);
+                const chroma = classes === active && knownWeights
+                    ? (() => {const w=classes.map(c=>Math.max(.25,Number(knownWeights[c])||1));let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let j=0;j<classes.length;j++){r-=w[j];if(r<0)return classes[j];}return classes[classes.length-1];})()
+                    : classes[rand(classes.length)];
+                const options = pools.get(chroma).filter(p => p !== previous);
+                if (!options.length) return [];
+                const chosen = options[rand(options.length)];
+                result.push(chosen);
+                previous = chosen;
             }
-        } else {
-            // Cover every note name and each available octave before repeating.
-            const orderedClasses = shuffle(Array.from({length: total}, (_, i) => available[i % available.length]));
-            const counts = new Map();
-            for (const c of orderedClasses) {
-                let candidates = pools.get(c);
-                const minUses = Math.min(...candidates.map(m => counts.get(m) || 0));
-                candidates = candidates.filter(m => (counts.get(m) || 0) === minUses);
-                const midi = candidates[rand(candidates.length)];
-                result.push(midi);
-                counts.set(midi, (counts.get(midi) || 0) + 1);
+            return result;
+        }
+        // Formal 36/48-note assessment: preserve class and octave quotas,
+        // then shuffle the MIDI multiset without adjacent identical targets.
+        const counts = new Map();
+        const bag = [];
+        for (const chroma of shuffle(Array.from({length: total}, (_, i) => available[i % available.length]))) {
+            const choices = pools.get(chroma);
+            const least = Math.min(...choices.map(m => counts.get(m) || 0));
+            const equal = choices.filter(m => (counts.get(m) || 0) === least);
+            const picked = equal[rand(equal.length)];
+            bag.push(picked);
+            counts.set(picked, (counts.get(picked) || 0) + 1);
+        }
+        for (let attempt = 0; attempt < 200; attempt++) {
+            const result = shuffle(bag);
+            if (result[0] !== previousMidi && result.every((m, i) => !i || m !== result[i-1])) {
+                return result;
             }
         }
-        return result;
+        return []; // Rather than silently introduce a predictable sequence.
     }
 
     function loadCourse(id) {
         try {
             const value = JSON.parse(localStorage.getItem(`ap-course-v1-${id}`) || "null");
             if (value && Number.isInteger(value.level) && value.level >= 1 && value.level <= 12) {
-                return {level: value.level,
+                return {level: value.courseVersion === 3 ? value.level : Math.max(3, value.level),
+                    courseVersion: 3,
                     // v18.5/v2.2.5 passes were vulnerable to sequence leakage.
                     // Preserve old data for audit, but don't reuse them to promote.
                     legacyGatePasses: Array.isArray(value.legacyGatePasses) ? value.legacyGatePasses
@@ -96,7 +114,7 @@
                     gateVersion: 2};
             }
         } catch (_) { /* storage may be unavailable */ }
-        return {level: 1, gatePasses: [], gateHistory: [], gateVersion: 2};
+        return {level: 3, courseVersion: 3, gatePasses: [], gateHistory: [], gateVersion: 2};
     }
     function saveCourse(id, course) {
         try { localStorage.setItem(`ap-course-v1-${id}`, JSON.stringify(course)); } catch (_) {}

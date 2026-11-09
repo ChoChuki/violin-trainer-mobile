@@ -47,7 +47,7 @@
                     <span id="keyLabel">Key</span>
                     <select id="keySelect"></select>
                 </label>
-                <label>
+                <label class="legacy-clef-control" hidden>
                     <span id="clefLabel">Clef</span>
                     <select id="clefSelect">
                         <option value="Treble">Treble</option>
@@ -67,6 +67,7 @@
                         <option value="ap">Absolute pitch</option>
                         <option value="apLearn">AP learning</option>
                         <option value="apCold">AP cold check</option>
+                        <option value="rpCourse">Relative pitch course</option>
                     </select>
                 </label>
                 <button id="applyButton" class="secondary" disabled>Apply</button>
@@ -101,11 +102,19 @@
                     </div>
                     <div class="ap-course-info" id="apCourseInfo" hidden>
                         <p id="apCourseLevel"></p>
+                        <div id="apStudyPanel" class="ap-study-panel" hidden>
+                            <p id="apStudyTitle" class="ap-study-title">1 · Listen & remember</p>
+                            <p id="apStudySubtitle" class="ap-study-subtitle">Tap each note repeatedly before attempting retrieval.</p>
+                            <div id="apStudyCards" class="ap-study-cards"></div>
+                            <p id="apStudyDue" class="ap-study-subtitle"></p>
+                        </div>
+                        <label class="ap-picker" for="apLevelSelect" id="apLevelPicker">
+                            <span id="apLevelLabel">Learning difficulty</span>
+                            <select id="apLevelSelect"></select>
+                        </label>
                         <p id="apCourseDescription"></p>
                         <div id="apColdConfirmation" class="ap-cold-confirm" hidden>
                             <p class="ap-description" id="apColdRangeText"></p>
-                            <label class="ap-opt"><input id="apColdCheck" type="checkbox"><span id="apColdConfirmText"></span></label>
-                            <label class="ap-opt"><input id="apColdMusicCheck" type="checkbox"><span id="apColdMusicText"></span></label>
                             <label class="ap-picker" for="apColdDevice"><span id="apColdDeviceLabel"></span>
                                 <select id="apColdDevice"><option value="speaker">Speaker</option><option value="wired">Wired headphones</option><option value="bluetooth">Bluetooth</option><option value="other">Other/unknown</option></select>
                             </label>
@@ -118,6 +127,39 @@
             </div>
         </section>
 
+
+        <section id="rpPanel" class="rp-panel" hidden>
+            <div class="rp-config">
+                <label><span id="rpLevelLabel">Level</span><select id="rpLevel"></select></label>
+                <label><span id="rpActivityLabel">Exercise</span>
+                    <select id="rpActivity">
+                        <option value="practice">Guided practice</option>
+                        <option value="review">Weak intervals</option>
+                        <option value="test">Independent check</option>
+                        <option value="locate">Instrument location</option>
+                        <option value="melody">Short melody</option>
+                    </select></label>
+                <label><span id="rpDirectionLabel">Direction</span>
+                    <select id="rpDirection"><option value="both">Both</option><option value="higher">Ascending</option><option value="lower">Descending</option></select></label>
+            </div>
+            <details class="rp-examples" id="rpExamples">
+                <summary id="rpSampleSummary">Show / hide examples</summary>
+                <div id="rpSamples" class="rp-sample-grid"></div>
+            </details>
+            <div class="rp-progress"><strong id="rpQuestionNumber"></strong><span id="rpMessage">Press Play to begin</span></div>
+            <div id="rpReference" class="rp-reference" hidden></div>
+            <div id="rpAnswers" class="rp-answer-grid" hidden></div>
+            <div class="rp-audio-controls">
+                <button id="rpReplay" type="button" class="secondary" hidden>Replay pair</button>
+                <button id="rpCorrectAudio" type="button" class="secondary" hidden>Play correct</button>
+                <button id="rpSelectedAudio" type="button" class="secondary" hidden>Play my answer</button>
+            </div>
+            <div id="rpResults" class="rp-results" hidden></div>
+            <details class="rp-history"><summary id="rpHistorySummary">Recent results</summary>
+                <p id="rpStats"></p><button id="rpExport" class="secondary" type="button">Export RP CSV</button></details>
+            <p id="rpIntro" class="rp-caption">Intervals are scored by semitone distance.</p>
+        </section>
+
         <section class="controls">
             <button id="playButton" class="primary" disabled>Play</button>
             <button id="nextButton" class="secondary" disabled>Next</button>
@@ -126,6 +168,7 @@
 
         <section class="ap-answer-panel" id="apAnswerPanel" hidden>
             <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
+            <button id="apRepeatNote" type="button" class="secondary ap-repeat-note" hidden>Replay correct note</button>
             <div id="apReview" class="ap-review" hidden></div>
         </section>
 
@@ -156,7 +199,8 @@
 
         <section class="answer-card">
             <div id="answerText" class="answer-text">Free play mode</div>
-            <svg id="staff" viewBox="0 0 800 185" role="img" aria-label="Music staff"></svg>
+            <span id="referenceChip" class="reference-chip" hidden></span>
+            <button id="intervalReplayButton" class="secondary interval-replay-button" type="button" hidden>Replay</button>
         </section>
 
         <section class="keyboard-card">
@@ -167,12 +211,17 @@
         </section>
         <p id="helpText" class="hint"></p>
     </main>
+    <!-- Legacy notation target kept off-screen for compatibility with unchanged Demo logic. -->
+    <svg id="staff" hidden aria-hidden="true" style="display:none"></svg>
 
     <script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
     <script src="./i18n.js"></script>
     <script src="./demo-score.js"></script>
     <script src="./ap-science.js"></script>
     <script src="./training-tracker.js"></script>
+    <script src="./ap-memory.js"></script>
+    <script src="./relative-course.js"></script>
+    <script src="./relative-ui.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>
