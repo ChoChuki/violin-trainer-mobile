@@ -1,23 +1,35 @@
-/* Relative Pitch Course v1: framework-free question engine, records and six-language labels.
+/* Relative Pitch Course v2: framework-free question engine, records and six-language labels.
  * Deliberately independent from the legacy Two notes question generator.
  * The suggested level order and review thresholds are design choices, not validated clinical gates.
  */
 (function(root) {
   'use strict';
   const LEVELS = [
-    {name:'Direction', distances:[0,1,2,5,7,12], directionOnly:true},
-    {name:'Anchors', distances:[0,2,7,12]},
-    {name:'Major third', distances:[0,2,4,7,12]},
-    {name:'Semitone', distances:[0,1,2,4,7,12]},
-    {name:'Fourth', distances:[0,1,2,4,5,7,12]},
-    {name:'Minor third', distances:[0,1,2,3,4,5,7,12]},
-    {name:'Major sixth', distances:[0,1,2,3,4,5,7,9,12]},
-    {name:'Minor sixth', distances:[0,1,2,3,4,5,7,8,9,12]},
-    {name:'Minor seventh', distances:[0,1,2,3,4,5,7,8,9,10,12]},
-    {name:'Major seventh', distances:[0,1,2,3,4,5,7,8,9,10,11,12]},
-    {name:'All simple intervals', distances:Array.from({length:13},(_,i)=>i)},
-    {name:'Compound I', distances:[12,13,14,15,16,17,18,19]},
-    {name:'Compound II', distances:[17,18,19,20,21,22,23,24]}
+    {name:'Direction', distances:[0,1,2], directionOnly:true},
+    {name:'1–2 semitones', distances:[1,2]},
+    {name:'1–3 semitones', distances:Array.from({length:3},(_,i)=>i+1)},
+    {name:'1–4 semitones', distances:Array.from({length:4},(_,i)=>i+1)},
+    {name:'1–5 semitones', distances:Array.from({length:5},(_,i)=>i+1)},
+    {name:'1–6 semitones', distances:Array.from({length:6},(_,i)=>i+1)},
+    {name:'1–7 semitones', distances:Array.from({length:7},(_,i)=>i+1)},
+    {name:'1–8 semitones', distances:Array.from({length:8},(_,i)=>i+1)},
+    {name:'1–9 semitones', distances:Array.from({length:9},(_,i)=>i+1)},
+    {name:'1–10 semitones', distances:Array.from({length:10},(_,i)=>i+1)},
+    {name:'1–11 semitones', distances:Array.from({length:11},(_,i)=>i+1)},
+    {name:'1–12 semitones', distances:Array.from({length:12},(_,i)=>i+1)},
+    {name:'0–12 semitones (mixed)', distances:Array.from({length:13},(_,i)=>i)},
+    {name:'12–13 semitones', distances:Array.from({length:2},(_,i)=>i+12)},
+    {name:'12–14 semitones', distances:Array.from({length:3},(_,i)=>i+12)},
+    {name:'12–15 semitones', distances:Array.from({length:4},(_,i)=>i+12)},
+    {name:'12–16 semitones', distances:Array.from({length:5},(_,i)=>i+12)},
+    {name:'12–17 semitones', distances:Array.from({length:6},(_,i)=>i+12)},
+    {name:'12–18 semitones', distances:Array.from({length:7},(_,i)=>i+12)},
+    {name:'12–19 semitones', distances:Array.from({length:8},(_,i)=>i+12)},
+    {name:'12–20 semitones', distances:Array.from({length:9},(_,i)=>i+12)},
+    {name:'12–21 semitones', distances:Array.from({length:10},(_,i)=>i+12)},
+    {name:'12–22 semitones', distances:Array.from({length:11},(_,i)=>i+12)},
+    {name:'12–23 semitones', distances:Array.from({length:12},(_,i)=>i+12)},
+    {name:'12–24 semitones', distances:Array.from({length:13},(_,i)=>i+12)},
   ];
   const SHORT = ['P1','m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7','P8',
     'm9','M9','m10','M10','P11','TT+8','P12','m13','M13','m14','M14','P15'];
@@ -89,7 +101,7 @@
     return {level,activity,direction,questions,index:0,records:[],createdAt:Date.now(),finished:false,
       total,low,high,standard:activity==='test'&&pool.length>=4};
   }
-  const storageKey=id=>`rp-course-v1-${id}`;
+  const storageKey=id=>`rp-course-v2-${id}`;
   function load(id) {try {const value=JSON.parse(localStorage.getItem(storageKey(id))||'null');if(value&&Array.isArray(value.records))return {level:value.level??1, records:value.records.slice(-1500),sessions:(value.sessions||[]).slice(-200)};}catch(_){}return {level:1,records:[],sessions:[]};}
   function save(id,state) {try {localStorage.setItem(storageKey(id),JSON.stringify({level:state.level,records:state.records.slice(-1500),sessions:state.sessions.slice(-200)}));}catch(_){} }
   function csv(records) {const keys=['day','site','level','activity','direction','reference','target','distance','signed','selected','selectedMidi','correct','replayed','hints','rtMs','time','id'];return ['\ufeff'+keys.join(','),...(records||[]).map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');}

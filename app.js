@@ -1,4 +1,4 @@
-const APP_VERSION = "violin-v2.2.9";
+const APP_VERSION = "violin-v2.2.10";
 const PLAY_DURATION = 0.7;
 const SUPPORTED_MIN_MIDI = 55;
 const SUPPORTED_MAX_MIDI = 88;

@@ -24,6 +24,13 @@
   Array.from($('rpLevel').options).forEach((el,i)=>el.textContent=`L${i} · ${C.LEVELS[i].name}`);
   sampleButtons(); render();
  }
+ function autoAdjustDirection(){
+  if(AP_APP_ID!=='violin'||$('rpDirection').value!=='both')return;
+  const level=Number($('rpLevel').value);
+  const cfg=C.LEVELS[level];
+  if(cfg&&!C.referencePool(SUPPORTED_MIN_MIDI,SUPPORTED_MAX_MIDI,cfg.distances,'both').length)
+   $('rpDirection').value='higher';
+ }
  function init() {
   if(started)return;
   state=C.load(AP_APP_ID); started=true;
@@ -31,7 +38,8 @@
     const el=document.createElement('option');el.value=String(n);$('rpLevel').appendChild(el);
   }
   $('rpLevel').value=String(Math.max(0,Math.min(C.LEVELS.length-1,state.level)));
-  $('rpLevel').addEventListener('change',()=>{if(testActive&&isMode()){cancelRound();}state.level=Number($('rpLevel').value);if(AP_APP_ID==='violin'&&state.level>=11&&$('rpDirection').value==='both')$('rpDirection').value='higher';C.save(AP_APP_ID,state);sampleButtons();render();});
+  autoAdjustDirection();
+  $('rpLevel').addEventListener('change',()=>{if(testActive&&isMode()){cancelRound();}state.level=Number($('rpLevel').value);autoAdjustDirection();C.save(AP_APP_ID,state);sampleButtons();render();});
   for (const id of ['rpActivity','rpDirection']) $(id).addEventListener('change',()=>{if(testActive&&isMode())cancelRound();sampleButtons();render();});
   $('rpReplay').addEventListener('click',()=>{if(!current()||!isMode())return;replayCount++;TrainingTracker.activity('question');playQuestion(current());render();});
   $('rpCorrectAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode())playPair(q.reference,q.target);});
@@ -58,7 +66,7 @@
   const box=$('rpSamples');box.replaceChildren();
   const level=Number($('rpLevel').value);
   if(!C.LEVELS[level])return;
-  const items=C.LEVELS[level].directionOnly?[0,1,2,7,12]:C.LEVELS[level].distances;
+  const items=C.LEVELS[level].distances;
   for(const distance of items){
    const b=document.createElement('button');b.className='secondary rp-sample';b.type='button';
    b.textContent=`▶ ${C.label(distance,lang())}`;
