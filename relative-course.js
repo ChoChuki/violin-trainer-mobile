@@ -61,7 +61,9 @@
   function categoryWeights(level,activity,history) {
     const distances=LEVELS[level].distances;
     if (activity==='test'||activity==='locate'||activity==='melody') return distances.map(()=>1);
-    const rows = (history||[]).filter(r=>r.level===level && r.activity!=='test' && r.activity!=='examples').slice(-200);
+    // Instrument-position errors do not measure interval-name recognition.
+    // Keep these skills in separate adaptive evidence pools.
+    const rows = (history||[]).filter(r=>r.level===level && ['practice','review'].includes(r.activity)).slice(-200);
     return distances.map(d=>{
       const recent=rows.filter(r=>r.distance===d).slice(-20);
       const errors=recent.filter(r=>!r.correct).length;

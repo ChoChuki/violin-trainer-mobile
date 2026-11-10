@@ -6,7 +6,7 @@
  const C = root.RelativePitchCourse;
  const $ = id=>document.getElementById(id);
  const shell=()=>document.querySelector('.app-shell');
- let state, session=null, audioVersion=0, heardAt=0, replayCount=0, selectedAnswer=null, started=false;
+ let state, session=null, audioVersion=0, heardAt=0, replayCount=0, selectedAnswer=null, started=false, questionAudioReady=false;
  const isMode=()=>typeof testMode!=='undefined'&&testMode==='rpCourse';
  const lang=()=>typeof currentLanguage!=='undefined'?currentLanguage:'en';
  const tx=key=>C.T(lang(),key);
@@ -22,6 +22,12 @@
   for(const el of $('rpActivity').options) el.textContent=tx(el.value);
   for(const el of $('rpDirection').options) el.textContent=tx(el.value);
   Array.from($('rpLevel').options).forEach((el,i)=>el.textContent=`L${i} · ${C.LEVELS[i].name}`);
+  for(const button of $('rpAnswers').querySelectorAll('button')){
+   const raw=button.dataset.answer;
+   const value=/^\d+$/.test(raw)?Number(raw):raw;
+   button.textContent=typeof value==='number'?C.label(value,lang())
+    :value==='higher'?'↑ '+tx('up'):value==='lower'?'↓ '+tx('down'):'＝ '+tx('same');
+  }
   sampleButtons(); render();
  }
  function autoAdjustDirection(){
@@ -41,15 +47,19 @@
   autoAdjustDirection();
   $('rpLevel').addEventListener('change',()=>{if(testActive&&isMode()){cancelRound();}state.level=Number($('rpLevel').value);autoAdjustDirection();C.save(AP_APP_ID,state);sampleButtons();render();});
   for (const id of ['rpActivity','rpDirection']) $(id).addEventListener('change',()=>{if(testActive&&isMode())cancelRound();sampleButtons();render();});
-  $('rpReplay').addEventListener('click',()=>{if(!current()||!isMode())return;replayCount++;TrainingTracker.activity('question');playQuestion(current());render();});
-  $('rpCorrectAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode())playPair(q.reference,q.target);});
-  $('rpSelectedAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode()&&Number.isInteger(selectedAnswer))playPair(q.reference,q.reference+(q.direction==='lower'?-selectedAnswer:selectedAnswer));});
+  $('rpReplay').addEventListener('click',()=>{if(!current()||!isMode())return;
+    if(!answered) replayCount++;
+    TrainingTracker.activity('question');
+    questionPlayback(current());render();
+  });
+  $('rpCorrectAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode()){TrainingTracker.activity('question');playPair(q.reference,q.target).catch(()=>{$('rpMessage').textContent='Audio unavailable — try again.';});}});
+  $('rpSelectedAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode()&&Number.isInteger(selectedAnswer)){TrainingTracker.activity('question');playPair(q.reference,q.reference+(q.direction==='lower'?-selectedAnswer:selectedAnswer)).catch(()=>{$('rpMessage').textContent='Audio unavailable — try again.';});}});
   $('rpExport').addEventListener('click',()=>{const blob=new Blob([C.csv(state.records)],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`rp-${AP_APP_ID}-${today()}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);});
   translate();modeChanged();
  }
  function cancelRound(){
   audioVersion++; if(typeof player!=='undefined'&&player&&audioContext)player.cancelQueue(audioContext);
-  session=null;replayCount=0;selectedAnswer=null;testActive=false;answered=false;
+  session=null;replayCount=0;selectedAnswer=null;testActive=false;answered=false;questionAudioReady=false;
   currentMidi=null;currentReferenceMidi=null;questionSerial++;
   resetKeyboardColors();updatePlayButton();
  }
@@ -57,7 +67,12 @@
   if(!started)return;
   const chosen=$('modeSelect').value==='rpCourse';
   $('rpPanel').hidden=!chosen;
-  if(!chosen){shell().classList.remove('rp-mode','rp-naming','rp-position');return;}
+  if(!chosen){
+   // Discard an unfinished round when leaving RP; never resume a stale question
+   // after the user's instrument/mode/range settings change.
+   if(session && !session.finished) cancelRound();
+   shell().classList.remove('rp-mode','rp-naming','rp-position');return;
+  }
   shell().classList.add('rp-mode');
   render();
  }
@@ -72,12 +87,12 @@
    b.textContent=`▶ ${C.label(distance,lang())}`;
    b.setAttribute('aria-label',`${tx('sample')} ${C.name(distance,lang())}`);
    b.addEventListener('click',()=>{if(testActive&&isMode())return;TrainingTracker.activity('question');APPitchScience.markPractice(AP_APP_ID);
-    const direction=Math.random()<.5?'higher':'lower';
-    const pool=C.referencePool(SUPPORTED_MIN_MIDI,SUPPORTED_MAX_MIDI,[distance],direction);
+    const direction=distance===0?'same':Math.random()<.5?'higher':'lower';
+    const pool=C.referencePool(SUPPORTED_MIN_MIDI,SUPPORTED_MAX_MIDI,[distance],direction==='same'?'higher':direction);
     if(!pool.length)return;
     const ref=pool[Math.floor(Math.random()*pool.length)],target=ref+(direction==='lower'?-distance:distance);
-    $('rpMessage').textContent=`${C.name(distance,lang())} · ${distance} · ${direction==='lower'?'↓':'↑'}`;
-    playPair(ref,target);
+    $('rpMessage').textContent=`${C.name(distance,lang())} · ${distance} · ${direction==='same'?'＝':direction==='lower'?'↓':'↑'}`;
+    playPair(ref,target).catch(()=>{$('rpMessage').textContent='Audio unavailable — try again.';});
    });box.appendChild(b);
   }
  }
@@ -128,9 +143,9 @@
   $('rpStats').textContent=`${tx('practice')}: ${stat(learn)} | ${tx('test')}: ${stat(checks)} | ${tx('locate')}: ${stat(location)}`;
  }
  async function playPair(ref,target,prelude=null){
-  if(!ready)return;
+  if(!ready)return false;
   const serial=++audioVersion;
-  await ensureAudio();if(serial!==audioVersion||!isMode())return;
+  await ensureAudio();if(serial!==audioVersion||!isMode())return false;
   player.cancelQueue(audioContext);
   let at=audioContext.currentTime+.05;
   const preset=typeof selectedPreset === "function" ? selectedPreset() : pianoPreset;
@@ -138,8 +153,25 @@
   player.queueWaveTable(audioContext,audioContext.destination,preset,at,ref,.58,.75);
   player.queueWaveTable(audioContext,audioContext.destination,preset,at+.80,target,.78,.75);
   heardAt=performance.now()+850+(prelude!==null?680:0);
+  return true;
  }
  function playQuestion(q){return playPair(q.reference,q.target,q.prelude);}
+ function questionPlayback(q){
+  // A displayed question is not answerable until its audio has been scheduled.
+  // If playback fails, the user can retry without recording an incorrect trial.
+  questionAudioReady=false;
+  for(const b of $('rpAnswers').querySelectorAll('button'))b.disabled=true;
+  return playQuestion(q).then(played=>{
+   if(!played||!isMode()||!testActive||answered||current()!==q)return;
+   questionAudioReady=true;
+   for(const b of $('rpAnswers').querySelectorAll('button'))b.disabled=false;
+  }).catch(()=>{
+   if(isMode()&&testActive&&!answered&&current()===q){
+    $('rpMessage').textContent='Audio unavailable — tap Replay to retry.';
+    setStatus('raw',{text:$('rpMessage').textContent});
+   }
+  });
+ }
  function startNext(){
   if(!ready||!isMode())return;
   if(testActive&&!answered)return;
@@ -155,7 +187,7 @@
   const q=session.questions[session.records.length];if(!q){finish();return;}
   audioVersion++;
   currentReferenceMidi=q.reference;currentMidi=q.target;
-  testActive=true;answered=false;selectedAnswer=null;replayCount=0;questionSerial++;
+  testActive=true;answered=false;questionAudioReady=false;selectedAnswer=null;replayCount=0;questionSerial++;
   player.cancelQueue(audioContext);resetKeyboardColors();
   if(isPosition()){rpMarkPitch(q.reference,'reference');if(AP_APP_ID==='piano')showOctave(q.reference,'instant');}
   $('rpCorrectAudio').hidden=true;$('rpSelectedAudio').hidden=true;
@@ -164,12 +196,13 @@
   setAnswer('raw',{text:isPosition()?`${tx('reference')}: ${fmtNote(q.reference)}`:`${tx('listen')}`});
   for(const b of $('rpAnswers').querySelectorAll('button')) {b.disabled=false;b.classList.remove('rp-picked');}
   TrainingTracker.activity('question');APPitchScience.markPractice(AP_APP_ID);
-  heardAt=performance.now()+50;updatePlayButton();render();playQuestion(q);
+  heardAt=performance.now()+50;updatePlayButton();render();
+  questionPlayback(q);
  }
  function activityPrompt(activity,level){return C.LEVELS[level].directionOnly?tx('directionTip'):activity==='locate'?tx('locationTip'):activity==='melody'?tx('melodyTip'):tx('listen');}
  function answerPosition(midi){if(!isMode())return false;if(!testActive||answered)return true;if(!isPosition())return true;answer(midi,true);return true;}
  function answer(value,position=false){
-  if(!isMode()||!session||!testActive||answered)return;
+  if(!isMode()||!session||!testActive||answered||!questionAudioReady)return;
   const q=current();if(!q)return;
   const isDirection=C.LEVELS[session.level].directionOnly;
   const selected=position?Number(value):value;
@@ -197,7 +230,7 @@
  }
  function finish(){
   if(!session||session.finished)return;
-  session.finished=true;testActive=false;answered=true;
+  session.finished=true;testActive=false;answered=true;questionAudioReady=false;
   player.cancelQueue(audioContext);audioVersion++;questionSerial++;
   const ok=session.records.filter(r=>r.correct).length;
   const clean=session.records.filter(r=>r.correct&&r.replayed===0).length;
@@ -214,5 +247,10 @@
  }
  function stop(){if(!isMode())return;cancelRound();$('rpResults').hidden=true;$('rpResults').replaceChildren();setStatus('raw',{text:tx('ready')});setAnswer('free');TrainingTracker.pause();render();}
  function changedLanguage(){translate();}
- return root.RPUI={init,modeChanged,startNext,stop,answerPosition,changedLanguage,render};
+ // Called after Apply regardless of which mode was previously selected.
+ function configurationApplied(){
+  if(session){cancelRound();$('rpResults').hidden=true;$('rpResults').replaceChildren();}
+  if(started)render();
+ }
+ return root.RPUI={init,modeChanged,configurationApplied,startNext,stop,answerPosition,changedLanguage,render};
 })(typeof window!=='undefined'?window:globalThis);
