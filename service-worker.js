@@ -1,63 +1,53 @@
-const CACHE_NAME = "violin-ear-trainer-v2.2.12";
+/* A cache belongs to this app and scope; unrelated PWAs are never deleted. */
+const PREFIX = "violin-ear-trainer";
+const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.4.1';
 const ASSETS = [
-    "./", "./index.html", "./styles.css", "./app.js", "./i18n.js", "./demo-score.js", "./ap-science.js", "./ap-memory.js", "./relative-course.js", "./relative-ui.js", "./training-tracker.js",
-    "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"
+  "./",
+  "./index.html",
+  "./training-tracker.js",
+  "./styles.css",
+  "./training-core.js",
+  "./ap-memory.js",
+  "./i18n.js",
+  "./training-copy.js",
+  "./ap-science.js",
+  "./demo-score.js",
+  "./app.js",
+  "./relative-course.js",
+  "./pitch-detect.js",
+  "./manifest.webmanifest",
+  "./relative-ui.js",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./vendor/WebAudioFontPlayer.js",
+  "./vendor/0400_JCLive_sf2_file.js"
 ];
-const EXTERNAL = [
-    "https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js",
-    "https://surikov.github.io/webaudiofontdata/sound/0400_JCLive_sf2_file.js"
-];
-
-// Cache the external WebAudioFont scripts as opaque responses and also serve
-// them from this cache when offline.  The earlier fetch handler never looked
-// at cross-origin requests, making offline-first startup fail despite caching.
-self.addEventListener("install", (event) => {
-    event.waitUntil((async () => {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.addAll(ASSETS.map((url) => new Request(url, {cache:"reload"})));
-        // A temporary CDN outage must not prevent the local app from installing.
-        await Promise.all(EXTERNAL.map(async (url) => {
-            try {
-                const req = new Request(url, {mode:"no-cors"});
-                const response = await fetch(req, {cache:"reload"});
-                if (response.ok || response.type === "opaque") await cache.put(req, response);
-            } catch (_) { /* Online playback can retry if this was not cached. */ }
-        }));
-    })());
-    self.skipWaiting();
+self.addEventListener('install',event=>{
+ event.waitUntil((async()=>{
+  const cache=await caches.open(CACHE_NAME);
+  await cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'})));
+ })());
 });
-
-self.addEventListener("activate", (event) => {
-    event.waitUntil(
-        caches.keys().then((names) => Promise.all(
-            names.filter((name) => name !== CACHE_NAME)
-                .map((name) => caches.delete(name))
-        ))
-    );
-    self.clients.claim();
+self.addEventListener('activate',event=>{
+ event.waitUntil((async()=>{
+  const owned=PREFIX+':'+encodeURIComponent(self.registration.scope)+':';
+  for(const name of await caches.keys()) if(name.startsWith(owned)&&name!==CACHE_NAME) await caches.delete(name);
+  await self.clients.claim();
+ })());
 });
-
-self.addEventListener("fetch", (event) => {
-    if (event.request.method !== "GET") return;
-    const local = event.request.url.startsWith(self.registration.scope);
-    const audioScript = EXTERNAL.includes(event.request.url);
-    if (!local && !audioScript) return;
-
-    event.respondWith((async () => {
-        const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        try {
-            const response = await fetch(event.request);
-            if (response.ok || response.type === "opaque") {
-                await cache.put(event.request, response.clone());
-            }
-            return response;
-        } catch (_) {
-            if (local && event.request.mode === "navigate") {
-                return await cache.match("./index.html") || Response.error();
-            }
-            return Response.error();
-        }
-    })());
+// The page asks for this only after the learner taps "Update" outside a round.
+self.addEventListener('message',event=>{
+ if(event.data&&event.data.type==='SKIP_WAITING')self.skipWaiting();
+});
+self.addEventListener('fetch',event=>{
+ if(event.request.method!=='GET'||!event.request.url.startsWith(self.registration.scope))return;
+ const url=new URL(event.request.url);
+ // Query-bearing API/export requests are never cached as application assets.
+ if(url.search)return;
+ event.respondWith((async()=>{
+  const cache=await caches.open(CACHE_NAME),cached=await cache.match(event.request);
+  if(cached)return cached;
+  try{return await fetch(event.request);}
+  catch(_){return event.request.mode==='navigate' ? (await cache.match('./index.html')||Response.error()) : Response.error();}
+ })());
 });

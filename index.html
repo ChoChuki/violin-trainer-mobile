@@ -17,7 +17,7 @@
         <header class="app-header">
             <div class="header-top">
                 <div class="header-spacer"></div>
-                <h1 id="appTitle">Violin Ear Trainer</h1>
+                <h1 id="appTitle">Violin Ear Trainer <small id="appVersion"></small></h1>
                 <label class="language-picker" for="languageSelect">
                     <span id="languageLabel">Language</span>
                     <select id="languageSelect" aria-label="Language">
@@ -30,8 +30,20 @@
                     </select>
                 </label>
             </div>
+            <button id="updateButton" type="button" class="secondary update-button" hidden>Update to the new version</button>
+            <button id="audioReload" type="button" class="secondary" hidden>Reload audio</button>
             <p id="status" class="status">Loading violin samples...</p>
         </header>
+
+        <p id="storageWarning" role="alert" hidden></p>
+        <!-- AP prompt, answers and results come first: during a round the settings are hidden,
+             after a round the result is read before anything else. -->
+        <section class="ap-answer-panel" id="apAnswerPanel" hidden>
+            <p id="apMessage" class="ap-message" role="status" aria-live="polite"></p>
+            <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
+            <button id="apRepeatNote" type="button" class="secondary ap-repeat-note" hidden>Replay correct note</button>
+            <div id="apReview" class="ap-review" hidden></div>
+        </section>
 
         <section class="settings-card">
             <div class="settings-grid">
@@ -91,13 +103,17 @@
                 </div>
                 <div class="ap-settings" id="apPicker" hidden>
                     <div id="apAssessmentOptions" class="ap-configuration">
-                    <label class="ap-picker" for="apTrialsSelect">
+                    <label class="ap-picker" for="apTrialsSelect" id="apTrialsPicker">
                         <span id="apTrialsLabel">Questions per round</span>
                         <select id="apTrialsSelect"><option value="12">12</option><option value="20">20</option><option value="36">36</option><option value="48">48</option></select>
                     </label>
-                    <label class="ap-picker" for="apTimeSelect">
+                    <label class="ap-picker" for="apTimeSelect" id="apTimePicker">
                         <span id="apTimeLabel">Response limit</span>
                         <select id="apTimeSelect"><option value="5">5 seconds</option><option value="2">2 seconds</option><option value="none">No limit</option></select>
+                    </label>
+                    <label class="ap-picker" for="apTimbre" id="apTimbrePicker">
+                        <span id="apTimbreLabel">Check sound</span>
+                        <select id="apTimbre"><option value="instrument">Instrument</option><option value="neutral">Neutral tone</option><option value="mixed">Mixed sounds</option></select>
                     </label>
                     </div>
                     <div class="ap-course-info" id="apCourseInfo" hidden>
@@ -105,6 +121,7 @@
                         <div id="apStudyPanel" class="ap-study-panel" hidden>
                             <p id="apStudyTitle" class="ap-study-title">1 · Listen & remember</p>
                             <p id="apStudySubtitle" class="ap-study-subtitle">Tap each note repeatedly before attempting retrieval.</p>
+                            <div id="apStudyOctaves" class="ap-study-octaves" hidden></div>
                             <div id="apStudyCards" class="ap-study-cards"></div>
                             <p id="apStudyDue" class="ap-study-subtitle"></p>
                         </div>
@@ -115,15 +132,18 @@
                         <p id="apCourseDescription"></p>
                         <div id="apColdConfirmation" class="ap-cold-confirm" hidden>
                             <p class="ap-description" id="apColdRangeText"></p>
+                            <p class="ap-description" id="apBreakInfo"></p>
                             <label class="ap-picker" for="apColdDevice"><span id="apColdDeviceLabel"></span>
                                 <select id="apColdDevice"><option value="speaker">Speaker</option><option value="wired">Wired headphones</option><option value="bluetooth">Bluetooth</option><option value="other">Other/unknown</option></select>
                             </label>
                             <label class="ap-opt"><input id="apHideColdCheck" type="checkbox"><span id="apHideColdText"></span></label>
                         </div>
-                        <label class="ap-opt" id="apResetOption" hidden><input id="apResetCheck" type="checkbox"><span id="apResetText"></span></label>
                     </div>
-                    <p id="apDescription" class="ap-description">No feedback until the round ends · jumps over 1 octave · answer by note name</p>
+                    <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Short burst of random tones before each question</span></label>
+                    <p id="apDescription" class="ap-description">Independent random draws, including repeats. Answers appear after the round.</p>
+                    <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>
+                <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>
             </div>
         </section>
 
@@ -138,10 +158,14 @@
                         <option value="test">Independent check</option>
                         <option value="locate">Instrument location</option>
                         <option value="melody">Short melody</option>
+                        <option value="produce">Sing / play first</option>
                     </select></label>
                 <label><span id="rpDirectionLabel">Direction</span>
                     <select id="rpDirection"><option value="both">Both</option><option value="higher">Ascending</option><option value="lower">Descending</option></select></label>
             </div>
+            <label class="rp-timbre"><span id="rpTimbreLabel">Check sound</span><select id="rpTimbre"><option value="instrument">Instrument</option><option value="neutral">Neutral tone</option></select></label>
+            <label class="option-row rp-mic" id="rpMicRow" hidden><input id="rpMicCheck" type="checkbox"><span id="rpMicText">Check with the microphone (experimental)</span></label>
+            <p id="rpFocus" class="rp-caption rp-focus" hidden></p>
             <details class="rp-examples" id="rpExamples">
                 <summary id="rpSampleSummary">Show / hide examples</summary>
                 <div id="rpSamples" class="rp-sample-grid"></div>
@@ -149,6 +173,14 @@
             <div class="rp-progress"><strong id="rpQuestionNumber"></strong><span id="rpMessage">Press Play to begin</span></div>
             <div id="rpReference" class="rp-reference" hidden></div>
             <div id="rpAnswers" class="rp-answer-grid" hidden></div>
+            <div id="rpProduce" class="rp-produce" hidden>
+                <p id="rpProducePrompt" class="rp-produce-prompt"></p>
+                <button id="rpProduceReveal" type="button" class="primary">Hear the answer</button>
+                <div id="rpProduceRate" class="rp-produce-rate" hidden>
+                    <button id="rpProduceMatched" type="button" class="secondary">Matched</button>
+                    <button id="rpProduceMissed" type="button" class="secondary">Off</button>
+                </div>
+            </div>
             <div class="rp-audio-controls">
                 <button id="rpReplay" type="button" class="secondary" hidden>Replay pair</button>
                 <button id="rpCorrectAudio" type="button" class="secondary" hidden>Play correct</button>
@@ -164,12 +196,6 @@
             <button id="playButton" class="primary" disabled>Play</button>
             <button id="nextButton" class="secondary" disabled>Next</button>
             <button id="demoButton" class="secondary" disabled>Demo</button>
-        </section>
-
-        <section class="ap-answer-panel" id="apAnswerPanel" hidden>
-            <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
-            <button id="apRepeatNote" type="button" class="secondary ap-repeat-note" hidden>Replay correct note</button>
-            <div id="apReview" class="ap-review" hidden></div>
         </section>
 
         <details class="ap-history-panel" id="apHistoryPanel">
@@ -214,13 +240,16 @@
     <!-- Legacy notation target kept off-screen for compatibility with unchanged Demo logic. -->
     <svg id="staff" hidden aria-hidden="true" style="display:none"></svg>
 
-    <script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
+    <script src="./vendor/WebAudioFontPlayer.js"></script>
     <script src="./i18n.js"></script>
     <script src="./demo-score.js"></script>
+    <script src="./training-core.js"></script>
+    <script src="./training-copy.js"></script>
     <script src="./ap-science.js"></script>
     <script src="./training-tracker.js"></script>
     <script src="./ap-memory.js"></script>
     <script src="./relative-course.js"></script>
+    <script src="./pitch-detect.js"></script>
     <script src="./relative-ui.js"></script>
     <script src="./app.js"></script>
 </body>

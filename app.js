@@ -1,4 +1,4 @@
-const APP_VERSION = "violin-v2.2.12";
+const APP_VERSION = "2.4.1";
 const PLAY_DURATION = 0.7;
 const SUPPORTED_MIN_MIDI = 55;
 const SUPPORTED_MAX_MIDI = 88;
@@ -6,6 +6,8 @@ const DEFAULT_MIN_MIDI = 60;
 const DEFAULT_MAX_MIDI = 71;
 const VIOLIN_OPEN_STRINGS = [{ name: "E5", midi: 76 }, { name: "A4", midi: 69 }, { name: "D4", midi: 62 }, { name: "G3", midi: 55 }];
 const VIOLIN_MAX_POSITION = 12;
+let violinDrawnWidth = 0; // scroller width the fingerboard was last drawn for (0 = drawn while hidden)
+const VIOLIN_ROUND_CHROME = 204; // px above and around the board in the tallest round layout (RP locate)
 const VIOLIN_MIN_MIDI = 55;
 const VIOLIN_MAX_MIDI = 88;
 
@@ -24,16 +26,6 @@ const LETTER_PITCH_CLASSES = {
     G: 7,
     A: 9,
     B: 11
-};
-
-const LETTER_INDICES = {
-    C: 0,
-    D: 1,
-    E: 2,
-    F: 3,
-    G: 4,
-    A: 5,
-    B: 6
 };
 
 const SOLFEGE_NAMES = {
@@ -145,50 +137,9 @@ const KEY_OPTIONS = [
     "Ab minor"
 ];
 
-const TREBLE_SHARP_POSITIONS = [
-    ["F", 5],
-    ["C", 5],
-    ["G", 5],
-    ["D", 5],
-    ["A", 4],
-    ["E", 5],
-    ["B", 4]
-];
-
-const TREBLE_FLAT_POSITIONS = [
-    ["B", 4],
-    ["E", 5],
-    ["A", 4],
-    ["D", 5],
-    ["G", 4],
-    ["C", 5],
-    ["F", 4]
-];
-
-const BASS_SHARP_POSITIONS = [
-    ["F", 3],
-    ["C", 3],
-    ["G", 3],
-    ["D", 3],
-    ["A", 2],
-    ["E", 3],
-    ["B", 2]
-];
-
-const BASS_FLAT_POSITIONS = [
-    ["B", 2],
-    ["E", 3],
-    ["A", 2],
-    ["D", 3],
-    ["G", 2],
-    ["C", 3],
-    ["F", 2]
-];
-
 // An octave fits fully inside the available phone viewport, including B.
 let WHITE_WIDTH = 52;
 let BLACK_WIDTH = 32;
-const SVG_NS = "http://www.w3.org/2000/svg";
 
 const elements = {
     status: document.getElementById("status"),
@@ -227,8 +178,6 @@ let instrumentMode = "violin";
 let violinReady = false;
 let violinLoadingPromise = null;
 let currentReferenceMidi = null;
-// The last real quiz target survives Next/Stop/Apply and is not changed by Demo.
-let lastQuestionMidi = null;
 let maxIntervalSemitones = null; // null = unlimited
 let minIntervalSemitones = 1;
 let targetDirection = "both"; // higher / lower / both, compared with reference pitch
@@ -236,6 +185,7 @@ let questionSerial = 0;
 let currentMidi = null;
 let answered = false;
 let testActive = false;
+let legacyAudioReady = false;
 let ready = false;
 let demoRunning = false;
 let demoCancelled = false;
@@ -258,9 +208,29 @@ const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioContextClass();
 const player = typeof WebAudioFontPlayer === "function" ? new WebAudioFontPlayer() : null;
 
-const VIOLIN_SAMPLE_URL = "https://surikov.github.io/webaudiofontdata/sound/0400_JCLive_sf2_file.js";
-function selectedPreset() {
+const VIOLIN_SAMPLE_URL = "./vendor/0400_JCLive_sf2_file.js";
+// Mean rendered pitch of each sample zone in cents against A4 = 440 Hz equal temperament,
+// measured in Chromium (frame-wise over one second; the samples carry roughly ±11 cents of
+// vibrato). Before the correction A4 sounded about 11 cents flat and neighbouring zones
+// differed by up to 8 cents. Training sounds use the corrected copy; the Demo keeps the
+// untouched samples. tests/claude_browser.cjs re-measures the result.
+const VIOLIN_ZONE_CENTS = [[21,58,-4.0],[59,62,0.5],[63,66,-6.2],[67,67,-11.4],[68,70,-11.4],[71,71,-7.8],
+    [72,74,-7.8],[75,78,-3.6],[79,79,3.0],[80,82,3.0],[83,86,-5.5],[87,87,2.0],[88,90,2.0]];
+let violinTuned = null;
+function demoPreset() {
     return violinReady ? window._tone_0400_JCLive_sf2_file : null;
+}
+function selectedPreset() {
+    if (!violinReady) return null;
+    if (!violinTuned) {
+        const original = window._tone_0400_JCLive_sf2_file;
+        // Shallow copies share the decoded buffers; only the fine tuning differs.
+        violinTuned = {...original, zones: original.zones.map((zone) => {
+            const fix = VIOLIN_ZONE_CENTS.find(([low, high]) => zone.keyRangeLow === low && zone.keyRangeHigh === high);
+            return fix ? {...zone, fineTune: (Number(zone.fineTune) || 0) - fix[2]} : zone;
+        })};
+    }
+    return violinTuned;
 }
 function loadViolinPreset() {
     if (violinReady) return Promise.resolve();
@@ -275,11 +245,10 @@ function loadViolinPreset() {
                 return;
             }
             try {
-                player.loader.decodeAfterLoading(audioContext, "_tone_0400_JCLive_sf2_file");
-                player.loader.waitLoad(() => {
+                TrainingCore.decodePreset(player,audioContext,"_tone_0400_JCLive_sf2_file").then(() => {
                     violinReady = true;
                     resolve();
-                });
+                },reject);
             } catch (error) { reject(error); }
         };
         script.onerror = () => reject(new Error("Violin sample download failed"));
@@ -328,6 +297,7 @@ function setAnswer(key, args = {}) {
 
 function setLanguage(language) {
     currentLanguage = TRANSLATIONS[language] ? language : "en";
+    document.getElementById("audioReload").textContent = t("audioReload");
     if (window.TrainingTracker?.setLanguage) window.TrainingTracker.setLanguage(currentLanguage);
     localStorage.setItem("violinEarTrainerLanguage", currentLanguage);
     document.documentElement.lang = currentLanguage;
@@ -381,14 +351,14 @@ function setLanguage(language) {
     if (ready) {
         if (!testActive && activePointers.size > 0) {
             renderHeldNotes();
-        } else if (!isApMode() && testActive && answered && currentMidi !== null) {
+        } else if (!isApMode() && testMode !== "rpCourse" && testActive && answered && currentMidi !== null) {
             setAnswer("raw", { text: formatAnswerText() });
         }
     }
     if (typeof drawStaff === "function" && !demoRunning) {
         if (!testActive && activePointers.size > 0) {
             drawStaff([...new Set(activePointers.values())]);
-        } else if (!isApMode() && answered && currentMidi !== null) {
+        } else if (!isApMode() && testMode !== "rpCourse" && answered && currentMidi !== null) {
             drawAnsweredStaff();
         } else {
             drawQuestionStaff();
@@ -396,6 +366,9 @@ function setLanguage(language) {
     }
     updateStaffReplayAccess();
     updateApView();
+    document.getElementById("autoNextText").textContent = t("autoNextText");
+    document.getElementById("updateButton").textContent = t("updateReady");
+    if (apMessageBuild) setApMessage(apMessageBuild);
     if (window.RPUI) RPUI.changedLanguage();
     renderApMemory();
 }
@@ -494,345 +467,13 @@ function solfegeName(midi, fifths) {
     return `${SOLFEGE_NAMES[note.letter]}${accidentalText(note.accidental)}${note.octave}`;
 }
 
-function diatonicIndex(letter, octave) {
-    return octave * 7 + LETTER_INDICES[letter];
-}
-
-function resolveClef(midi) {
-    if (clefMode !== "Auto") {
-        return clefMode;
-    }
-
-    return midi >= 60 ? "Treble" : "Bass";
-}
-
-function staffGeometry(clef) {
-    const lineSpacing = 18;
-    const bottomY = 125;
-    const halfStep = lineSpacing / 2;
-    const bottomIndex = clef === "Treble"
-        ? diatonicIndex("E", 4)
-        : diatonicIndex("G", 2);
-
-    return {
-        lineSpacing,
-        bottomY,
-        halfStep,
-        bottomIndex
-    };
-}
-
-function staffY(letter, octave, clef) {
-    const geometry = staffGeometry(clef);
-    const noteIndex = diatonicIndex(letter, octave);
-
-    return geometry.bottomY
-        - (noteIndex - geometry.bottomIndex) * geometry.halfStep;
-}
-
-function svgElement(name, attributes = {}) {
-    const element = document.createElementNS(SVG_NS, name);
-
-    Object.entries(attributes).forEach(([key, value]) => {
-        element.setAttribute(key, value);
-    });
-
-    return element;
-}
-
-function addSvgText(x, y, text, size = 16, weight = 600, anchor = "middle") {
-    const element = svgElement("text", {
-        x,
-        y,
-        "font-size": size,
-        "font-family": "Arial, sans-serif",
-        "font-weight": weight,
-        "text-anchor": anchor,
-        fill: "#111827"
-    });
-
-    element.textContent = text;
-    elements.staff.appendChild(element);
-    return element;
-}
-
-function drawKeySignature(clef, fifths) {
-    if (fifths === 0) {
-        return 135;
-    }
-
-    let positions;
-    let symbol;
-
-    if (fifths > 0) {
-        symbol = "#";
-        positions = clef === "Treble"
-            ? TREBLE_SHARP_POSITIONS.slice(0, fifths)
-            : BASS_SHARP_POSITIONS.slice(0, fifths);
-    } else {
-        symbol = "b";
-        positions = clef === "Treble"
-            ? TREBLE_FLAT_POSITIONS.slice(0, -fifths)
-            : BASS_FLAT_POSITIONS.slice(0, -fifths);
-    }
-
-    let x = 115;
-
-    positions.forEach(([letter, octave]) => {
-        addSvgText(
-            x,
-            staffY(letter, octave, clef) + 6,
-            symbol,
-            20,
-            800
-        );
-        x += 22;
-    });
-
-    return x + 12;
-}
-
-function drawLedgerLines(noteIndex, noteX, bottomIndex, halfStep, bottomY) {
-    const topIndex = bottomIndex + 8;
-
-    if (noteIndex < bottomIndex) {
-        for (
-            let lineIndex = bottomIndex - 2;
-            lineIndex >= noteIndex;
-            lineIndex -= 2
-        ) {
-            const y = bottomY - (lineIndex - bottomIndex) * halfStep;
-
-            elements.staff.appendChild(svgElement("line", {
-                x1: noteX - 18,
-                y1: y,
-                x2: noteX + 18,
-                y2: y,
-                stroke: "#111827",
-                "stroke-width": 2
-            }));
-        }
-    } else if (noteIndex > topIndex) {
-        for (
-            let lineIndex = topIndex + 2;
-            lineIndex <= noteIndex;
-            lineIndex += 2
-        ) {
-            const y = bottomY - (lineIndex - bottomIndex) * halfStep;
-
-            elements.staff.appendChild(svgElement("line", {
-                x1: noteX - 18,
-                y1: y,
-                x2: noteX + 18,
-                y2: y,
-                stroke: "#111827",
-                "stroke-width": 2
-            }));
-        }
-    }
-}
-
-function selectStaffClefs(midis) {
-    if (clefMode !== "Auto") {
-        return [clefMode];
-    }
-    if (midis.length === 0) {
-        return ["Treble"];
-    }
-    const needsBass = midis.some((midi) => midi < 60);
-    const needsTreble = midis.some((midi) => midi >= 60);
-    if (needsBass && needsTreble) {
-        return ["Treble", "Bass"];
-    }
-    return needsTreble ? ["Treble"] : ["Bass"];
-}
-
 function keySignatureLabel(name) {
     const [tonic, mode] = name.split(" ");
     return `${tonic} ${t(mode)}`;
 }
 
-function drawStaff(midi = null, showHint = false) {
-    const midis = midi === null ? [] : (Array.isArray(midi) ? [...new Set(midi)].sort((a, b) => a - b) : [midi]);
-    // Staff geometry depends on the selected range, never on held notes.
-    const rangeMidis = [];
-    for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
-        rangeMidis.push(pitch);
-    }
-    const clefs = selectStaffClefs(rangeMidis);
-    const fifths = KEY_FIFTHS[keyName];
-    const mixed = clefs.length === 2;
-    const gap = mixed ? 160 : 0;
-    const noteRecords = [];
-    const allPositions = [];
-    const baselines = clefs.map((clef, index) => ({
-        clef,
-        bottomY: 125 + gap * index,
-        index,
-        signatureEnd: 0
-    }));
-
-    for (const staff of baselines) {
-        allPositions.push(staff.bottomY - 4 * 18, staff.bottomY);
-    }
-
-    for (const pitch of rangeMidis) {
-        const clef = clefs.length === 2 ? (pitch < 60 ? "Bass" : "Treble") : clefs[0];
-        const staff = baselines.find((item) => item.clef === clef);
-        const note = spelledNote(pitch, fifths);
-        const geometry = staffGeometry(clef);
-        allPositions.push(staff.bottomY - (diatonicIndex(note.letter, note.octave) - geometry.bottomIndex) * geometry.halfStep);
-    }
-
-    for (const pitch of midis) {
-        const clef = clefs.length === 2 ? (pitch < 60 ? "Bass" : "Treble") : clefs[0];
-        const staff = baselines.find((item) => item.clef === clef);
-        const note = spelledNote(pitch, fifths);
-        const geometry = staffGeometry(clef);
-        const noteIndex = diatonicIndex(note.letter, note.octave);
-        const y = staff.bottomY - (noteIndex - geometry.bottomIndex) * geometry.halfStep;
-        noteRecords.push({ pitch, clef, staff, note, noteIndex, y, geometry });
-        allPositions.push(y);
-    }
-
-    const top = Math.min(...allPositions, 45) - 35;
-    const bottom = Math.max(...allPositions, 130) + 58;
-    elements.staff.setAttribute("viewBox", `0 ${top} 800 ${bottom - top}`);
+function drawStaff() {
     elements.staff.replaceChildren();
-
-    for (const staff of baselines) {
-        for (let line = 0; line < 5; line += 1) {
-            const y = staff.bottomY - line * 18;
-            elements.staff.appendChild(svgElement("line", {
-                x1: 35, y1: y, x2: 765, y2: y,
-                stroke: "#111827", "stroke-width": 2
-            }));
-        }
-        const clefX = 70;
-        addSvgText(clefX, staff.bottomY - 4 * 18 - 10,
-            t(staff.clef === "Treble" ? "treble" : "bass"), 12, 800);
-
-        staff.signatureEnd = drawKeySignatureAt(staff.clef, fifths, staff.bottomY);
-    }
-
-    addSvgText(710, Math.min(...allPositions, 45) - 16, keySignatureLabel(keyName), 12, 800);
-
-    if (midis.length === 0) {
-        if (showHint) {
-            addSvgText(400, baselines.at(-1).bottomY + 31, t("staffHidden"), 12, 500);
-        }
-        return;
-    }
-
-    const baseX = Math.max(380, ...baselines.map((item) => item.signatureEnd + 80));
-    const accidentalItems = [];
-
-    for (const staff of baselines) {
-        const group = noteRecords.filter((item) => item.staff === staff);
-        let previousIndex = null;
-        let shifted = false;
-
-        for (const item of group) {
-            if (previousIndex !== null && item.noteIndex - previousIndex <= 1) {
-                shifted = !shifted;
-            } else {
-                shifted = false;
-            }
-            item.x = baseX + (shifted ? 19 : 0);
-            previousIndex = item.noteIndex;
-        }
-
-        for (const item of group) {
-            drawLedgerLinesAt(item.noteIndex, item.x, item.geometry.bottomIndex,
-                item.geometry.halfStep, item.staff.bottomY);
-        }
-
-        for (const item of group) {
-            const keyAccidental = keySignature(fifths)[item.note.letter];
-            const sharedStep = group.some((other) => other !== item && other.noteIndex === item.noteIndex);
-            if (sharedStep || keyAccidental !== item.note.accidental) {
-                const accidental = item.note.accidental === 1 ? "#" : item.note.accidental === -1 ? "b" : "n";
-                accidentalItems.push({ y: item.y, text: accidental, staff, x: item.x });
-            }
-        }
-    }
-
-    accidentalItems.sort((a, b) => a.y - b.y || a.x - b.x);
-    const occupiedColumns = [];
-    for (const item of accidentalItems) {
-        let column = 0;
-        while (occupiedColumns[column] !== undefined && Math.abs(item.y - occupiedColumns[column]) < 25) {
-            column += 1;
-        }
-        occupiedColumns[column] = item.y;
-        addSvgText(Math.min(baseX, item.x) - 29 - column * 23, item.y + 6, item.text, 20, 800);
-    }
-
-    for (const item of noteRecords) {
-        elements.staff.appendChild(svgElement("ellipse", {
-            cx: item.x, cy: item.y, rx: 10, ry: 6, fill: "#111827"
-        }));
-    }
-
-    for (const staff of baselines) {
-        const group = noteRecords.filter((item) => item.staff === staff);
-        if (group.length === 0) continue;
-        const lowest = group[0];
-        const highest = group.at(-1);
-        const middleIndex = lowest.geometry.bottomIndex + 4;
-        const upward = lowest.noteIndex < middleIndex;
-        const stemX = upward ? Math.max(...group.map((item) => item.x)) + 10
-            : Math.min(...group.map((item) => item.x)) - 10;
-        elements.staff.appendChild(svgElement("line", {
-            x1: stemX,
-            y1: upward ? lowest.y : highest.y,
-            x2: stemX,
-            y2: upward ? highest.y - 48 : lowest.y + 48,
-            stroke: "#111827", "stroke-width": 2
-        }));
-    }
-
-    const names = midis.map((pitch) => spelledNoteName(pitch, fifths)).join("  ");
-    addSvgText(400, bottom - 12, names, 13, 800);
-}
-
-function drawKeySignatureAt(clef, fifths, bottomY) {
-    if (fifths === 0) {
-        return 135;
-    }
-    const sharp = fifths > 0;
-    const positions = sharp
-        ? (clef === "Treble" ? TREBLE_SHARP_POSITIONS : BASS_SHARP_POSITIONS).slice(0, fifths)
-        : (clef === "Treble" ? TREBLE_FLAT_POSITIONS : BASS_FLAT_POSITIONS).slice(0, -fifths);
-    const geometry = staffGeometry(clef);
-    let x = 115;
-    positions.forEach(([letter, octave]) => {
-        const y = bottomY - (diatonicIndex(letter, octave) - geometry.bottomIndex) * geometry.halfStep;
-        addSvgText(x, y + 6, sharp ? "#" : "b", 20, 800);
-        x += 22;
-    });
-    return x + 12;
-}
-
-function drawLedgerLinesAt(noteIndex, x, bottomIndex, halfStep, bottomY) {
-    const topIndex = bottomIndex + 8;
-    if (noteIndex < bottomIndex) {
-        for (let lineIndex = bottomIndex - 2; lineIndex >= noteIndex; lineIndex -= 2) {
-            const y = bottomY - (lineIndex - bottomIndex) * halfStep;
-            elements.staff.appendChild(svgElement("line", {
-                x1: x - 18, y1: y, x2: x + 18, y2: y,
-                stroke: "#111827", "stroke-width": 2
-            }));
-        }
-    } else if (noteIndex > topIndex) {
-        for (let lineIndex = topIndex + 2; lineIndex <= noteIndex; lineIndex += 2) {
-            const y = bottomY - (lineIndex - bottomIndex) * halfStep;
-            elements.staff.appendChild(svgElement("line", {
-                x1: x - 18, y1: y, x2: x + 18, y2: y,
-                stroke: "#111827", "stroke-width": 2
-            }));
-        }
-    }
 }
 
 function whiteGlobalIndex(midi) {
@@ -900,8 +541,13 @@ function drawViolinFingerboard() {
     // semitone offset is visible simultaneously. No horizontal pages or auto-jumps.
     const scroller = elements.keyboardScroller;
     const board = elements.keyboard;
-    const header = 27, rowHeight = 35, gutter = 25;
-    const viewport = Math.max(280, scroller.clientWidth || 300);
+    // Thirteen rows must fit below the round controls without scrolling on short
+    // screens (browser toolbars included); rows shrink before anything is cut off.
+    const header = 25, rowHeight = Math.max(28, Math.min(36, Math.floor((window.innerHeight - VIOLIN_ROUND_CHROME) / 13))), gutter = 25;
+    // The board is laid out in pixels. While an AP or RP naming screen hides it the real
+    // width is unknown: estimate it now and let the ResizeObserver redraw once it is shown.
+    violinDrawnWidth = scroller.clientWidth;
+    const viewport = Math.max(280, violinDrawnWidth || Math.min(window.innerWidth, 620) - 36);
     const cell = (viewport - gutter - 4) / VIOLIN_OPEN_STRINGS.length;
     board.replaceChildren();
     board.classList.add("violin-board");
@@ -959,7 +605,7 @@ function drawViolinFingerboard() {
             key.addEventListener("pointerdown", event => {
                 if (demoRunning) return;
                 event.preventDefault();
-                key.setPointerCapture(event.pointerId);
+                try { key.setPointerCapture(event.pointerId); } catch (_) { /* pointer already released */ }
                 pressKey(midi,event.pointerId);
             });
             key.addEventListener("pointerup", event => releasePointer(event.pointerId));
@@ -1107,7 +753,7 @@ function drawKeyboard() {
                 return;
             }
             event.preventDefault();
-            key.setPointerCapture(event.pointerId);
+            try { key.setPointerCapture(event.pointerId); } catch (_) { /* pointer already released */ }
             pressKey(midi, event.pointerId);
         });
         key.addEventListener("pointerup", (event) => releasePointer(event.pointerId));
@@ -1140,9 +786,10 @@ function setControlsEnabled(enabled) {
 }
 
 async function ensureAudio() {
-    if (audioContext.state === "suspended") {
+    if (audioContext.state !== "running") {
         await audioContext.resume();
     }
+    if (audioContext.state !== "running") throw new Error("Audio unavailable");
 }
 
 function releaseAllKeys() {
@@ -1271,7 +918,7 @@ function updateStaffReplayAccess() {
     if (canReplay) {
         const pos = instrumentMode === "violin" ? violinPositionForMidi(currentReferenceMidi) : null;
         const string = pos ? VIOLIN_OPEN_STRINGS[pos.row].name + " +" + pos.step : "";
-        chip.textContent = `Ref ${noteName(currentReferenceMidi)}${string ? " · " + string : ""}`;
+        chip.textContent = `${RelativePitchCourse.T(currentLanguage,"reference")} ${noteName(currentReferenceMidi)}${string ? " · " + string : ""}`;
     }
 }
 
@@ -1288,21 +935,17 @@ function formatAnswerText() {
 async function playQuestion() {
     if (!ready || currentMidi === null) return;
     APPitchScience.markPractice(AP_APP_ID);
-    const serial = questionSerial;
-    const target = currentMidi;
-    const reference = currentReferenceMidi;
-    if (testMode !== "interval" || reference === null) {
-        playTone(target);
-        return;
-    }
+    const serial=questionSerial,target=currentMidi,reference=currentReferenceMidi;
+    legacyAudioReady=false;
     await ensureAudio();
-    if (serial !== questionSerial || !testActive || target !== currentMidi) return;
-    player.cancelQueue(audioContext);
-    const start = audioContext.currentTime + 0.05;
-    player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(),
-        start, reference, 0.6, 0.75);
-    player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(),
-        start + 0.8, target, 0.9, 0.75);
+    if (serial!==questionSerial || !testActive) return;
+    player.cancelQueue(audioContext);TrainingCore.cancelAudio();
+    const start=audioContext.currentTime+.05;
+    const pair=testMode==='interval' && reference!==null;
+    if(pair) player.queueWaveTable(audioContext,audioContext.destination,selectedPreset(),start,reference,.6,.75);
+    if(!player.queueWaveTable(audioContext,audioContext.destination,selectedPreset(),start+(pair?.8:0),target,.7,.75)) throw new Error('Audio unavailable');
+    const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
+    legacyAudioReady=await TrainingCore.waitForAudio(audioContext,start+(pair?1.5:.7)+latency,()=>serial===questionSerial&&testActive&&!document.hidden);
 }
 
 async function playTone(midi) {
@@ -1312,7 +955,7 @@ async function playTone(midi) {
     }
 
     await ensureAudio();
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
 
     player.queueWaveTable(
         audioContext,
@@ -1325,18 +968,23 @@ async function playTone(midi) {
     );
 }
 
-// AP course v1: learning uses immediate labelled feedback; cold gate and legacy AP
-// assessment NEVER reveal answers before the session ends.
+// Protocol 4: learning gives labelled feedback; independent checks reveal
+// answers only after the round. Legacy history remains readable.
 const AP_PITCH_LABELS = ["C", "C\u266f/D\u266d", "D", "D\u266f/E\u266d", "E", "F",
     "F\u266f/G\u266d", "G", "G\u266f/A\u266d", "A", "A\u266f/B\u266d", "B"];
 const AP_APP_ID = "violin";
 let apCourse = APPitchScience.loadCourse(AP_APP_ID);
 let apSession = null;
-let lastApQuestionMidi = (() => {
+// Keep the last presented AP pitch across modes, sessions and page reloads.
+// This is a test-sequence constraint, not an additional memory/score signal.
+const AP_LAST_MIDI_KEY = `ap-last-midi-${AP_APP_ID}`;
+let lastApPresentedMidi = (() => {
     try {
-        const value = localStorage.getItem(`ap-last-question-midi-${AP_APP_ID}`);
-        return value === null ? null : Number(value);
-    } catch (_) {return null;}
+        const saved = localStorage.getItem(AP_LAST_MIDI_KEY);
+        if (saved === null) return null;
+        const value = Number(saved);
+        return Number.isInteger(value) && value >= 0 && value <= 127 ? value : null;
+    } catch (_) { return null; }
 })();
 let apTimer = null;
 let apDeadline = null;
@@ -1345,10 +993,18 @@ let apFeedbackPlaying = false;
 let apFeedbackTimer = null;
 let apSoundStart = null;
 let apAudioLatencyMs = 0;
-const AP_COLD_MIN_MIDI = 60; // C4
-const AP_COLD_MAX_MIDI = 83; // B5, two complete chromatic octaves for both instruments
 const AP_COLD_MIN_REST_MS = 4 * 3600 * 1000; // conservative product assumption, not a validated cut-off
+// Protocol 5: interference burst, neighbouring "Other" notes, spacing that needs
+// after-break evidence, selectable round length and sound, automatic continue.
+const AP_PROTOCOL = 6;
+const AP_MASK_SECONDS = 1;
+const AP_MASK_GAP = 0.25;
+const AP_MASK_KEY = "ear-ap-mask";
+const AUTO_NEXT_KEY = "ear-auto-next";
 let apHideColdAnswers = false;
+let apStudyOctave = null; // C of the octave played by the labelled study cards
+let apMessageBuild = null;
+let autoNextTimer = null;
 
 
 function isApMode(mode = testMode) { return ["ap", "apLearn", "apCold"].includes(mode); }
@@ -1358,9 +1014,11 @@ function clearApFeedback() {
     apFeedbackPlaying = false;
 }
 function apEligiblePitches(from = minMidi, to = maxMidi) {
-    // The violin can reach G3-E6 (33 semitones); a 36-semitone minimum would be impossible.
-    if (to - from < 23) return [];
-    return Array.from({length: to - from + 1}, (_, i) => from + i);
+    // Preserve equal register support across pitch classes; an arbitrary
+    // 12-note range (e.g. C#4–C5) is not a complete aligned C–B octave.
+    const range = APPitchScience.effectiveRange(from, to);
+    if (!range) return [];
+    return Array.from({length: range.to - range.from + 1}, (_, i) => range.from + i);
 }
 function apCorrect(record, session = apSession) {
     if (record.result === "interrupted" || record.result === "audio-error") return false;
@@ -1370,6 +1028,14 @@ function apCorrect(record, session = apSession) {
 function apMetricFor(session) {
     return APPitchScience.metrics(session.records.map((r) => ({...r, correct: apCorrect(r, session), target: r.pitch})));
 }
+const AP_RANGE_COPY = {
+    en: "Actual AP question range",
+    de: "Tatsächlicher AP-Testbereich",
+    ja: "AP出題の実際の音域",
+    it: "Estensione effettiva delle domande AP",
+    el: "Πραγματικό εύρος ερωτήσεων AP",
+    "zh-TW": "AP 實際出題音域"
+};
 const AP_MEMORY_COPY = {
     en: ["1 · Listen and remember", "Tap each labelled note as often as needed. Then press Play for untimed recall; mistakes return sooner.", "Due now", "Next review", "Replay correct note"],
     de: ["1 · Anhören und merken", "Beschriftete Töne mehrfach hören. Danach ohne Zeitlimit erinnern; Fehler werden früher wiederholt.", "Jetzt wiederholen", "Nächste Wiederholung", "Richtigen Ton anhören"],
@@ -1382,6 +1048,26 @@ function apMemoryText(which) {
     const copy = AP_MEMORY_COPY[currentLanguage] || AP_MEMORY_COPY.en;
     return copy[{title:0,subtitle:1,due:2,next:3,replay:4}[which]];
 }
+function setApMessage(build) {
+    // The panel carries its own prompt and feedback: the header is hidden during a round.
+    apMessageBuild = build;
+    const box = document.getElementById("apMessage");
+    if (box) box.textContent = build ? build() : "";
+}
+function apGuessLabel(guess) {
+    return guess === null ? t("apEmpty") : guess === "out" ? t("apNoteOther") : AP_PITCH_LABELS[guess];
+}
+function apStudyBases() {
+    const bases = APPitchScience.octaveBases(Number(elements.startNote.value), Number(elements.endNote.value));
+    return bases.length ? bases : [60];
+}
+function apBreakText() {
+    const last = APPitchScience.lastPracticeAt(AP_APP_ID);
+    if (last === null) return `${t("apBreakLabel")}: \u2014 \xb7 ${t("ordinaryCheck")}`;
+    const minutes = Math.max(0, Math.floor((Date.now() - last) / 60000));
+    const rested = minutes * 60000 >= AP_COLD_MIN_REST_MS;
+    return `${t("apBreakLabel")}: ${Math.floor(minutes / 60)} h ${minutes % 60} min \xb7 ${t(rested ? "afterBreak" : "ordinaryCheck")}`;
+}
 function renderApMemory() {
     const panel = document.getElementById("apStudyPanel");
     if (!panel) return;
@@ -1389,20 +1075,45 @@ function renderApMemory() {
     panel.hidden = selectedMode !== "apLearn" || Boolean(apSession && !apSession.finished);
     if (panel.hidden) return;
     document.getElementById("apStudyTitle").textContent = apMemoryText("title");
-    document.getElementById("apStudySubtitle").textContent = apMemoryText("subtitle");
+    document.getElementById("apStudySubtitle").textContent = t("apLearnDesc");
+    // A study card is a stable anchor: it stays in one octave (C4–B4 when available)
+    // until the learner deliberately switches to another complete octave of the range.
+    const bases = apStudyBases();
+    if (!bases.includes(apStudyOctave)) apStudyOctave = bases.includes(60) ? 60 : bases[0];
+    const octaves = document.getElementById("apStudyOctaves");
+    octaves.replaceChildren();
+    octaves.hidden = bases.length < 2;
+    if (!octaves.hidden) {
+        const label = document.createElement("span");
+        label.textContent = t("apStudyOctave");
+        octaves.appendChild(label);
+        for (const base of bases) {
+            const choice = document.createElement("button");
+            choice.type = "button";
+            choice.className = `secondary ap-study-octave${base === apStudyOctave ? " current" : ""}`;
+            choice.textContent = `${noteName(base)}\u2013${noteName(base + 11)}`;
+            choice.setAttribute("aria-pressed", String(base === apStudyOctave));
+            choice.addEventListener("click", () => {
+                if (demoRunning || testActive) return;
+                apStudyOctave = base;
+                renderApMemory();
+            });
+            octaves.appendChild(choice);
+        }
+    }
     const cards = document.getElementById("apStudyCards");
     cards.replaceChildren();
     const available = APPitchScience.learned(apCourse.level);
-    const items = APMemory.due(AP_APP_ID,available);
+    const items = APMemory.due(AP_APP_ID,available).sort((a,b)=>available.indexOf(a.pc)-available.indexOf(b.pc));
+    const newest = available[available.length - 1];
     for (const entry of items) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `secondary ap-study-note${entry.nextAt <= Date.now() ? " due" : ""}`;
-        // A study card is a stable auditory memory anchor, not a random-octave test.
-        // C4..B4 are available in both instruments regardless of the question range.
-        // e.g. E always plays MIDI 64 (E4), never E5/E6 on another tap.
-        const studyMidi = 60 + entry.pc;
-        button.textContent = `▶ ${AP_PITCH_LABELS[entry.pc]}${Math.floor(studyMidi / 12) - 1} · ${entry.hits}/${entry.attempts}`;
+        // The newest name of a level has hardly been heard yet: listen before recalling.
+        const fresh = entry.pc === newest && entry.attempts < 6;
+        button.className = `secondary ap-study-note${entry.nextAt <= Date.now() ? " due" : ""}${fresh ? " fresh" : ""}`;
+        const studyMidi = apStudyOctave + entry.pc;
+        button.textContent = `\u25b6 ${AP_PITCH_LABELS[entry.pc]}${Math.floor(studyMidi / 12) - 1} \xb7 ${entry.hits}/${entry.attempts}${fresh ? ` \xb7 ${t("apNewNote")}` : ""}`;
         button.addEventListener("click", async () => {
             if (demoRunning || testActive || elements.modeSelect.value !== "apLearn") return;
             TrainingTracker.activity("ap-learning");
@@ -1412,38 +1123,50 @@ function renderApMemory() {
     }
     const due = items.filter(x => x.nextAt <= Date.now());
     const next = items.filter(x => x.nextAt > Date.now()).sort((a,b)=>a.nextAt-b.nextAt)[0];
-    const time = next ? new Date(next.nextAt).toLocaleTimeString(currentLanguage,{hour:'2-digit',minute:'2-digit'}) : "—";
-    document.getElementById("apStudyDue").textContent = `${apMemoryText("due")}: ${due.length ? due.map(x=>AP_PITCH_LABELS[x.pc]).join(", ") : "—"} · ${apMemoryText("next")}: ${time}`;
+    const time = next ? new Date(next.nextAt).toLocaleString(currentLanguage,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : "\u2014";
+    document.getElementById("apStudyDue").textContent = `${apMemoryText("due")}: ${due.length ? due.map(x=>AP_PITCH_LABELS[x.pc]).join(", ") : "\u2014"} \xb7 ${apMemoryText("next")}: ${time}`;
 }
 function refreshApCourseUI() {
+    const mode = elements.modeSelect.value;
     const pane = document.getElementById("apCourseInfo");
-    document.getElementById("apDescription").hidden = elements.modeSelect.value !== "ap";
+    document.getElementById("apDescription").hidden = mode !== "ap";
     if (!pane) return;
-    pane.hidden = !["apLearn", "apCold"].includes(elements.modeSelect.value);
+    pane.hidden = !["apLearn", "apCold"].includes(mode);
     const level = APPitchScience.learned(apCourse.level).map((x) => AP_PITCH_LABELS[x]).join(" \xb7 ");
     document.getElementById("apCourseLevel").textContent = t("apCourseLevel", {level: apCourse.level, names: level});
-    document.getElementById("apColdConfirmation").hidden = elements.modeSelect.value !== "apCold";
-    document.getElementById("apLevelPicker").hidden = !["apLearn", "apCold"].includes(elements.modeSelect.value);
+    document.getElementById("apColdConfirmation").hidden = mode !== "apCold";
+    document.getElementById("apLevelPicker").hidden = !["apLearn", "apCold"].includes(mode);
     document.getElementById("apLevelSelect").value = String(apCourse.level);
     document.getElementById("apLevelLabel").textContent = t("apLevelLabel");
-    document.getElementById("apResetOption").hidden = elements.modeSelect.value !== "apLearn";
-    document.getElementById("apCourseDescription").textContent = t(elements.modeSelect.value === "apLearn" ? "apLearnDesc" : "apColdDesc");
+    // The study panel already shows the learning description; do not print it twice.
+    const description = document.getElementById("apCourseDescription");
+    description.hidden = mode === "apLearn";
+    description.textContent = t(mode === "apLearn" ? "apLearnDesc" : "apColdDesc");
     document.getElementById("apColdDeviceLabel").textContent = t("apColdDeviceLabel");
     for (const option of document.getElementById("apColdDevice").options) {
         option.textContent = t("apDevice" + option.value.charAt(0).toUpperCase() + option.value.slice(1));
     }
     document.getElementById("apHideColdText").textContent = t("apHideColdText");
     document.getElementById("apColdRangeText").textContent = t("apColdRangeText");
-    document.getElementById("apResetText").textContent = t("apResetText");
+    document.getElementById("apBreakInfo").textContent = mode === "apCold" ? apBreakText() : "";
+    // Every AP mode, the cold check included, draws from the range the user selected.
+    const range = APPitchScience.effectiveRange(Number(elements.startNote.value), Number(elements.endNote.value));
+    const describe = range ? `${noteName(range.from)}\u2013${noteName(range.to)}` : "\u2014";
+    document.getElementById("apEffectiveRange").textContent = `${AP_RANGE_COPY[currentLanguage] || AP_RANGE_COPY.en}: ${describe}`;
     document.getElementById("apExportButton").textContent = t("apExportButton");
     document.getElementById("apProgressTitle").textContent = t("apProgressTitle");
+    // The sound is part of the recorded condition: compare rounds with the same sound only.
+    document.getElementById("apTimbreLabel").textContent = t("apSoundLabel");
+    for (const option of document.getElementById("apTimbre").options) option.textContent = t(option.value);
+    document.getElementById("apMaskText").textContent = t("apMaskText");
     renderApMemory();
 }
 function updateApView() {
     const isAp = isApMode() && !demoRunning;
+    const running = Boolean(apSession && !apSession.finished);
     document.querySelector(".app-shell").classList.toggle("ap-mode", isAp);
     document.querySelector(".app-shell").classList.toggle("ap-complete", Boolean(isAp && apSession?.finished));
-    elements.apAnswerPanel.hidden = !isAp || (testMode !== "ap" && !apSession);
+    elements.apAnswerPanel.hidden = !isAp || !apSession;
     elements.apAnswers.querySelectorAll("button").forEach((button) => {
         const answer = button.dataset.pitchClass === "out" ? "out" : Number(button.dataset.pitchClass);
         const allowed = testMode === "ap" ? answer !== "out" : (apSession && (answer === "out"
@@ -1451,7 +1174,7 @@ function updateApView() {
         button.hidden = isAp && !allowed;
         button.disabled = !ready || !testActive || answered || !apAudioReady || !isAp || !allowed;
     });
-    document.getElementById("apLevelSelect").disabled = Boolean(apSession && !apSession.finished);
+    document.getElementById("apLevelSelect").disabled = running;
     if (ready) {
         elements.nextButton.disabled = isAp && (!testActive || !answered || apSession?.finished || apFeedbackPlaying);
     }
@@ -1462,8 +1185,24 @@ function updateApView() {
     }
     refreshApCourseUI();
     const replayNote = document.getElementById("apRepeatNote");
-    replayNote.hidden = !(isAp && testMode === "apLearn" && apSession && !apSession.finished && answered && !apFeedbackPlaying);
-    if (!replayNote.hidden) replayNote.textContent = apMemoryText("replay");
+    replayNote.hidden = !(isAp && testMode === "apLearn" && running && !apFeedbackPlaying && (apAudioReady || answered));
+    if (!replayNote.hidden) replayNote.textContent = answered ? apMemoryText("replay") : t("replayTarget");
+}
+function markApButtons(record) {
+    // Learning shows right and wrong; checks only confirm which button was taken.
+    const feedback = apSession.kind === "learn" && (record.result === "answered" || record.result === "timeout");
+    const target = apSession.known && !apSession.known.includes(record.pitch % 12) ? "out" : String(record.pitch % 12);
+    elements.apAnswers.querySelectorAll("button").forEach((button) => {
+        const value = button.dataset.pitchClass;
+        button.classList.remove("ap-picked", "ap-right", "ap-wrong");
+        if (record.guess !== null && value === String(record.guess)) {
+            button.classList.add(feedback ? (value === target ? "ap-right" : "ap-wrong") : "ap-picked");
+        }
+        if (feedback && value === target) button.classList.add("ap-right");
+    });
+}
+function clearApButtons() {
+    elements.apAnswers.querySelectorAll("button").forEach((button) => button.classList.remove("ap-picked", "ap-right", "ap-wrong"));
 }
 function renderApResults() {
     if (!apSession?.finished) return;
@@ -1474,6 +1213,35 @@ function renderApResults() {
     const rt = metric.medianRt === null ? "\u2014" : `${(metric.medianRt / 1000).toFixed(2)}s`;
     summary.textContent = `${t("apReview")} \xb7 ${metric.correct}/${metric.total} \xb7 ${t("apMedianRT")}: ${rt}`;
     results.appendChild(summary);
+    const fresh=apSession.records.filter(r=>!r.repair&&!r.replayed&&(r.result==='answered'||r.result==='timeout'));
+    const detail=document.createElement('p');
+    detail.textContent=`${t('fresh')}: ${fresh.filter(r=>apCorrect(r)).length}/${fresh.length} · ${t(apSession.timbre)}`;
+    results.appendChild(detail);
+    const aided=apSession.records.filter(r=>r.repair||r.replayed);
+    detail.textContent+=` · ${t('assisted')}: ${aided.filter(r=>apCorrect(r)).length}/${aided.length}`;
+    const counts=document.createElement('p');
+    const known=apSession.known||Array.from({length:12},(_,i)=>i);
+    if(apSession.kind!=='learn'){
+        const chance=document.createElement('p');
+        chance.textContent=`${t('chance')}: ${(100/(known.length+(known.length<12?1:0))).toFixed(1)}%`;
+        results.appendChild(chance);
+    }
+    counts.textContent=t('coverage')+': '+known.map(pc=>`${AP_PITCH_LABELS[pc]}=${apSession.records.filter(r=>r.pitch%12===pc).length}`).join(' · ');
+    results.appendChild(counts);
+    if(apSession.known&&apSession.known.length<12){
+        const named=apSession.records.filter(r=>known.includes(r.pitch%12));
+        const other=apSession.records.filter(r=>!known.includes(r.pitch%12));
+        const split=document.createElement('p');split.textContent=`${t('apKnownScore')}: ${named.filter(r=>apCorrect(r)).length}/${named.length} · ${t('apOtherScore')}: ${other.filter(r=>apCorrect(r)).length}/${other.length}`;results.appendChild(split);
+    }
+    const guide=document.createElement('p');
+    // 90 % follows the criterion of adult pitch-naming studies; 60 % is a product heuristic.
+    const freshRate=fresh.length?fresh.filter(r=>apCorrect(r)).length/fresh.length:0;
+    guide.textContent=t(freshRate<.6?'lowerLevelHint':freshRate>=.9?'nextLevelHint':'keepLevelHint')+' '+t('roundBreak');results.appendChild(guide);
+    if (apSession.effectiveRange) {
+        const where=document.createElement('p');
+        where.textContent=`${AP_RANGE_COPY[currentLanguage] || AP_RANGE_COPY.en}: ${noteName(apSession.effectiveRange[0])}\u2013${noteName(apSession.effectiveRange[1])}`;
+        results.appendChild(where);
+    }
     if (apSession.kind === "cold") {
         const note = document.createElement("p");
         note.textContent = apSession.interrupted ? t("apInterrupted")
@@ -1504,40 +1272,69 @@ function renderApResults() {
 function finishApRound() {
     if (!apSession || apSession.finished) return;
     clearApTimer(); clearApFeedback();
+    window.clearTimeout(autoNextTimer);
     apSession.finished = true;
+    TrainingTracker.pause();
     testActive = false; answered = true; currentMidi = null;
     questionSerial += 1; apAudioReady = false;
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     const metric = apMetricFor(apSession);
     const session = apSession;
     session.completedAt = Date.now();
-    // Cold checks now measure progress without deciding what the user may learn.
+    // Checks measure progress without deciding what the user may learn.
     // Existing history stays on the device; level selection is explicit.
     APPitchScience.putRows(AP_APP_ID, "sessions", [{id: session.id, kind: session.kind,
+        protocol:AP_PROTOCOL, timbre:session.timbre, gapSincePracticeMs:session.gapSincePracticeMs,
+        range:[minMidi,maxMidi],effectiveRange:session.effectiveRange,
+        limitMs:session.limitMs,known:session.known,masked:session.masked,afterBreak:session.afterBreak,
         day: session.day, level: session.level, started: session.startAt,
         finished: session.completedAt, eligible: session.eligible, interrupted: session.interrupted,
-        total: session.total, ...metric}]);
+        total: session.total, attempted:session.records.length, ...metric}]);
     setStatus("apSummary", {score: metric.correct, total: session.total});
     setAnswer("apSummary", {score: metric.correct, total: session.total});
+    setApMessage(() => t("apSummary", {score: metric.correct, total: session.total}));
+    clearApButtons();
     drawStaff(); updatePlayButton(); updateApView();
     refreshApHistory();
 }
+// Spacing evidence. In a feedback round only the very first note after a break is
+// free of a labelled reference; in a no-feedback check after a break every note is.
+function updateApMemory(record) {
+    const known = apSession.known || [], pc = record.pitch % 12;
+    const correct = apCorrect(record);
+    const assisted = !!record.repair || record.replayed > 0;
+    const cold = !!apSession.afterBreak && (apSession.kind === "cold" || apSession.records.length === 1);
+    const guessed = typeof record.guess === "number" ? record.guess : null;
+    if (known.includes(pc)) {
+        APMemory.record(AP_APP_ID, pc, correct, Date.now(), assisted, cold);
+        if (!correct && guessed !== null) APMemory.confuse(AP_APP_ID, pc, guessed);
+        if (!correct && apSession.kind === "learn") TrainingCore.queueRepair(apSession.repairs, pc, apSession.records.length);
+    }
+    // A learned name given to a different note: that name's boundary is unsure as well.
+    if (!correct && guessed !== null && guessed !== pc && known.includes(guessed)) {
+        APMemory.record(AP_APP_ID, guessed, false, Date.now(), false, false);
+        APMemory.confuse(AP_APP_ID, guessed, pc);
+        if (apSession.kind === "learn") TrainingCore.queueRepair(apSession.repairs, guessed, apSession.records.length);
+    }
+}
 function recordApAnswer(guess = null, result = null, inputEvent = null) {
     if (!isApMode() || !apSession || apSession.finished || !testActive || answered) return;
+    if (result === null && (!apAudioReady || performance.now() < apSoundStart)) return;
     clearApTimer();
     TrainingTracker.activity("ap-answer");
     const pitch = currentMidi;
     const now = Date.now();
     const responseTime = inputEvent?.timeStamp ?? performance.now();
-    const rtMs = apSoundStart === null ? null : Math.round(responseTime - apSoundStart);
+    const rtMs = apSoundStart === null ? null : Math.max(0, Math.round(responseTime - apSoundStart));
     const status = result || (guess === null ? "timeout" : "answered");
-    const record = {id: `${apSession.id}-${apSession.records.length + 1}`, sessionId: apSession.id,
+    const scored = status === "answered" || status === "timeout";
+    const record = {protocol:AP_PROTOCOL, timbre:apSession.trialTimbre || apSession.timbre, repair:!!apSession.currentRepair, replayed:apSession.replayed||0, id: `${apSession.id}-${apSession.records.length + 1}`, sessionId: apSession.id,
         kind: apSession.kind, level: apSession.level, day: apSession.day,
         ordinal: apSession.records.length + 1, pitch, guess, result: status, rtMs,
         playedAt: now - (Number.isFinite(rtMs) ? rtMs : 0), submittedAt: now,
         audibleLatencyEstimateMs: apAudioLatencyMs, source: AP_APP_ID,
         previousPitch: apSession.records.length ? apSession.records[apSession.records.length - 1].pitch : null,
-        eligibleCold: apSession.eligible, resetSoundOn: Boolean(document.getElementById("apResetCheck").checked),
+        eligibleCold: apSession.eligible, afterBreak: apSession.afterBreak, resetSoundOn: !!apSession.masked,
         pointerTimeStamp: inputEvent?.timeStamp ?? null,
         pointerX: inputEvent?.clientX ?? null, pointerY: inputEvent?.clientY ?? null,
         buttonIndex: guess === "out" ? 12 : guess,
@@ -1547,140 +1344,193 @@ function recordApAnswer(guess = null, result = null, inputEvent = null) {
         outputDevice: apSession.outputDevice,
         hiddenCount: apSession.hiddenCount || 0,
         gapSincePracticeMs: apSession.gapSincePracticeMs,
-        coldSourceRange: apSession.kind === "cold" ? "C4-B5" : "configured"};
+        coldSourceRange: apSession.kind === "cold" && apSession.effectiveRange
+            ? `${noteName(apSession.effectiveRange[0])}-${noteName(apSession.effectiveRange[1])}` : "configured"};
     apSession.records.push(record);
     APPitchScience.putRows(AP_APP_ID, "trials", [{...record, correct: apCorrect(record)}]);
-    if (apSession.kind === "learn" && apSession.known?.includes(pitch % 12) &&
-        (status === "answered" || status === "timeout")) {
-        APMemory.record(AP_APP_ID, pitch % 12, apCorrect(record));
-    }
+    if (scored && apSession.kind !== "assessment") updateApMemory(record);
     if (status === "interrupted" || status === "audio-error") apSession.interrupted = true;
     answered = true; apAudioReady = false;
     questionSerial += 1;
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     resetKeyboardColors(); drawStaff();
+    markApButtons(record);
     const last = apSession.records.length >= apSession.total;
     if (last && apSession.kind !== "learn") {finishApRound(); return;}
-    if (apSession.kind === "learn" && (status === "answered" || status === "timeout")) {
+    if (apSession.kind === "learn" && scored) {
         apSession.pendingFinish = last;
         const correct = apCorrect(record);
-        setStatus(correct ? "apLearnCorrect" : "apLearnWrong", {note: AP_PITCH_LABELS[pitch % 12]});
-        setAnswer(correct ? "apLearnCorrect" : "apLearnWrong", {note: AP_PITCH_LABELS[pitch % 12]});
-        playApLearningFeedback(pitch).catch(() => {
+        const note = AP_PITCH_LABELS[pitch % 12];
+        setStatus(correct ? "apLearnCorrect" : "apLearnWrong", {note});
+        setAnswer(correct ? "apLearnCorrect" : "apLearnWrong", {note});
+        setApMessage(() => correct ? `\u2713 ${t("apLearnCorrect", {note})}`
+            : `\u2717 ${t("apLearnWrong", {note})} \xb7 ${t("apPicked")}: ${apGuessLabel(guess)}`);
+        playApLearningFeedback(pitch, correct).catch(() => {
             apFeedbackPlaying = false;
             if (apSession?.pendingFinish) finishApRound(); else updateApView();
         });
     } else {
         if (last) {finishApRound(); return;}
-        setStatus(status === "interrupted" ? "apInterrupted" : guess === null ? "apTimedOut" : "apRecorded");
-        setAnswer(status === "interrupted" ? "apInterrupted" : guess === null ? "apTimedOut" : "apRecorded");
+        const auto = autoNextEnabled();
+        const key = status === "interrupted" ? "apInterrupted" : guess === null
+            ? (auto ? "apTimedOutShort" : "apTimedOut") : (auto ? "apRecordedShort" : "apRecorded");
+        const done = apSession.records.length, total = apSession.total;
+        setStatus(key);
+        setAnswer(key);
+        setApMessage(() => `${done} / ${total} \xb7 ${t(key)}`);
+        // An interrupted or silent question waits for the learner; it never chains on.
+        if (scored) scheduleAutoNext(350);
     }
     updateApView();
 }
-function apResetSound(startTime, seconds) {
-    if (typeof audioContext.createOscillator !== "function") return;
-    // This short, original sweep is a *learning-only* distractor, not a validated memory eraser.
-    const o = audioContext.createOscillator(), g = audioContext.createGain();
-    const up = Math.random() > 0.5, low = 100 + Math.random() * 130, high = 850 + Math.random() * 400;
-    o.type = "sine";
-    o.frequency.setValueAtTime(up ? low : high, startTime);
-    o.frequency.exponentialRampToValueAtTime(up ? high : low, startTime + seconds);
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(0.025, startTime + 0.04);
-    g.gain.setValueAtTime(0.025, startTime + seconds - 0.08);
-    g.gain.linearRampToValueAtTime(0.0001, startTime + seconds);
-    o.connect(g); g.connect(audioContext.destination);
-    o.start(startTime); o.stop(startTime + seconds + 0.02);
-}
-async function playApLearningFeedback(pitch) {
+async function playApLearningFeedback(pitch, correct = false) {
     const serial = questionSerial;
     apFeedbackPlaying = true; updateApView();
     await ensureAudio();
     if (serial !== questionSerial || !apSession || apSession.finished || testMode !== "apLearn") return;
     const start = audioContext.currentTime + 0.04;
-    player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(), start, pitch, 0.7, 0.7);
+    // The labelled answer sounds exactly like the question that was just heard.
+    if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, start, pitch, 0.7);
+    else player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(), start, pitch, 0.7, 0.7);
     // One correct pitch only: no additional octave playback after answering.
-    let waitMs = 840;
-    if (document.getElementById("apResetCheck").checked) {
-        apResetSound(start + 0.82, 1.5); waitMs = 2460;
-    }
+    const waitMs = 840;
     apFeedbackTimer = window.setTimeout(() => {
         if (serial !== questionSerial) return;
         apFeedbackPlaying = false;
-        if (apSession?.pendingFinish) finishApRound();
-        else updateApView();
+        if (apSession?.pendingFinish) { finishApRound(); return; }
+        updateApView();
+        // A miss waits for Next so the labelled note can be replayed and compared.
+        if (correct) scheduleAutoNext(300);
     }, waitMs);
 }
-async function playApPitch(midi, serial) {
+async function playApPitch(midi, serial, withMask = true) {
     await ensureAudio();
     if (serial !== questionSerial || !testActive || !isApMode() ||
         currentMidi !== midi || !apSession || apSession.finished || document.hidden) return;
-    player.cancelQueue(audioContext);
-    const startAt = audioContext.currentTime + 0.05;
-    player.queueWaveTable(audioContext, audioContext.destination,
-        selectedPreset(), startAt, midi, PLAY_DURATION, 0.75);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
+    const scheduledAt = audioContext.currentTime + 0.05;
+    // The interference burst precedes each new question, never a replay of the same note.
+    const startAt = withMask && apSession.masked
+        ? TrainingCore.maskTone(audioContext, scheduledAt, AP_MASK_SECONDS) + AP_MASK_GAP : scheduledAt;
+    if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, startAt, midi, PLAY_DURATION);
+    else if (!player.queueWaveTable(audioContext, audioContext.destination,
+        selectedPreset(), startAt, midi, PLAY_DURATION, 0.75)) throw new Error("Audio unavailable");
     // Browser APIs cannot observe the exact acoustic onset of a Bluetooth headset;
     // this is a scheduling + output-latency estimate, recorded explicitly as such.
     apAudioLatencyMs = 50 + 1000 * ((audioContext.outputLatency || 0) + (audioContext.baseLatency || 0));
-    apSoundStart = performance.now() + apAudioLatencyMs;
+    apSoundStart = performance.now() + 1000 * (startAt - scheduledAt) + apAudioLatencyMs;
+    const played = await TrainingCore.waitForAudio(audioContext, startAt + PLAY_DURATION + apAudioLatencyMs/1000,
+        () => serial === questionSerial && testActive && !document.hidden);
+    if (!played) {
+        if (serial === questionSerial && testActive && !document.hidden) throw new Error("Audio paused");
+        return;
+    }
     apAudioReady = true;
     if (apSession.limitMs !== null) {
-        const delay = Math.max(0, Math.round(apAudioLatencyMs));
-        apDeadline = Date.now() + delay + apSession.limitMs;
-        apTimer = window.setTimeout(() => recordApAnswer(null, "timeout"), delay + apSession.limitMs);
+        const remaining = Math.max(0, apSession.limitMs - (performance.now()-apSoundStart));
+        apDeadline = Date.now() + remaining;
+        apTimer = window.setTimeout(() => recordApAnswer(null, "timeout"), remaining);
     }
     updateApView();
 }
 function startApQuestion() {
+    window.clearTimeout(autoNextTimer);
     if (!apSession || apSession.finished) {
         const kind = testMode === "apLearn" ? "learn" : testMode === "apCold" ? "cold" : "assessment";
         const known = kind === "assessment" ? null : APPitchScience.learned(apCourse.level);
-        const total = kind === "cold" ? 20 : kind === "learn" ? 12 : Number(elements.apTrialsSelect.value);
-        const plan = APPitchScience.makeSequence({
-            from: kind === "cold" ? AP_COLD_MIN_MIDI : minMidi,
-            to: kind === "cold" ? AP_COLD_MAX_MIDI : maxMidi, total, known,
-            previousMidi: lastApQuestionMidi,
+        const total = kind === "cold" ? 20 : Number(elements.apTrialsSelect.value);
+        // All three kinds use the selected range; nothing rewrites From/To.
+        const plan = APPitchScience.makeSequence({from: minMidi, to: maxMidi, total, known,
+            previousMidi: lastApPresentedMidi,
             knownWeights: kind === "learn" ? Object.fromEntries(
                 APMemory.due(AP_APP_ID,known || []).map(x => [x.pc, x.nextAt <= Date.now() ? 2.5 : 1])) : null});
         if (plan.length !== total) {setStatus("apNeedRange"); return;}
         const lastPractice = APPitchScience.lastPracticeAt(AP_APP_ID);
         const gapSincePracticeMs = lastPractice === null ? null : Date.now() - lastPractice;
-        // Informational only: first check after a break is the best baseline.
-        const eligible = kind === "cold" && !APPitchScience.practiceToday(AP_APP_ID) &&
-            (gapSincePracticeMs === null || gapSincePracticeMs >= AP_COLD_MIN_REST_MS);
+        // Informational only: evidence gathered after a break weighs more. Never a gate.
+        const afterBreak = gapSincePracticeMs !== null && gapSincePracticeMs >= AP_COLD_MIN_REST_MS;
+        const eligible = kind === "cold" && afterBreak;
         apHideColdAnswers = kind === "cold" && document.getElementById("apHideColdCheck").checked;
+        const range = APPitchScience.effectiveRange(minMidi, maxMidi);
         apSession = {id: `${AP_APP_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            kind, total, plan, records: [], known, limitMs: kind === "cold" ? 8000
-                : kind === "learn" ? null : elements.apTimeSelect.value === "none" ? null
-                    : Number(elements.apTimeSelect.value) * 1000,
-            finished: false, eligible, interrupted: false, hiddenCount: 0,
+            kind, total, plan, records: [], known, protocol:AP_PROTOCOL, repairs:[],
+            timbre: document.getElementById("apTimbre").value,
+            masked: document.getElementById("apMaskCheck").checked,
+            limitMs: kind === "assessment" && elements.apTimeSelect.value !== "none"
+                ? Number(elements.apTimeSelect.value) * 1000 : null,
+            finished: false, eligible, afterBreak, interrupted: false, hiddenCount: 0,
             gapSincePracticeMs,
             outputDevice: document.getElementById("apColdDevice").value,
-            level: apCourse.level, day: APPitchScience.day(), startAt: Date.now()};
-        // Locks this device/site's cold-start eligibility for any subsequent same-day test.
+            level: apCourse.level, day: APPitchScience.day(), startAt: Date.now(),
+            effectiveRange: range ? [range.from, range.to] : null};
+        // The local timestamp is only a break indicator; other devices are unknown.
         APPitchScience.markPractice(AP_APP_ID);
     }
     TrainingTracker.activity(apSession.kind === "learn" ? "ap-learning" : "ap-check");
     if (testActive && !answered) return;
     if (apFeedbackPlaying) return;
     clearApTimer(); clearApFeedback();
+    apSession.currentRepair = false;
+    apSession.replayed = 0;
+    apSession.trialTimbre = apSession.timbre === "mixed"
+        ? TrainingCore.choose(["instrument", "neutral"]) : apSession.timbre;
+    if (apSession.kind === "learn" && apSession.records.length < apSession.total) {
+        const repair = TrainingCore.takeRepair(apSession.repairs, apSession.records.length);
+        const weights = Object.fromEntries(APMemory.due(AP_APP_ID, apSession.known).map(x=>[x.pc,TrainingCore.weight(x)]));
+        const normalOptions={from:minMidi,to:maxMidi,total:1,known:apSession.known,
+            knownWeights:weights,previousMidi:lastApPresentedMidi};
+        let next;
+        if (repair !== null) {
+            next=APPitchScience.makeSequence({...normalOptions,forcedPC:repair})[0];
+            if (next !== undefined) apSession.currentRepair=true;
+            else TrainingCore.queueRepair(apSession.repairs, repair, apSession.records.length);
+        }
+        if (next === undefined) next=APPitchScience.makeSequence(normalOptions)[0];
+        apSession.plan[apSession.records.length]=next;
+    }
     const target = apSession.plan[apSession.records.length];
     if (target === undefined) {finishApRound(); return;}
     releaseAllKeys(); window.clearTimeout(freeDisplayTimeout);
-    player.cancelQueue(audioContext); resetKeyboardColors();
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio(); resetKeyboardColors();
     currentMidi = target; currentReferenceMidi = null;
-    lastApQuestionMidi = target;
-    try { localStorage.setItem(`ap-last-question-midi-${AP_APP_ID}`, String(target)); } catch (_) {}
-    testActive = true; answered = false; apAudioReady = false;
+    lastApPresentedMidi = target;
+    try { localStorage.setItem(AP_LAST_MIDI_KEY, String(target)); } catch (_) {}
+    testActive = true; answered = false; apAudioReady = false; apSoundStart = null;
     questionSerial += 1;
     const serial = questionSerial;
     updatePlayButton();
-    setStatus(apSession.kind === "learn" ? "apLearnListen" : "apListen",
-        {index: apSession.records.length + 1, total: apSession.total});
+    const index = apSession.records.length + 1, total = apSession.total;
+    const listenKey = apSession.kind === "learn" ? "apLearnListen" : "apListen";
+    setStatus(listenKey, {index, total});
     setAnswer("apChoose");
+    setApMessage(() => t(listenKey, {index, total}));
+    clearApButtons();
     drawStaff(null, true); updateStaffReplayAccess(); updateApView();
     playApPitch(target, serial).catch(() => {
         if (serial === questionSerial) recordApAnswer(null, "audio-error");
+    });
+}
+function autoNextEnabled() {
+    return document.getElementById("autoNextCheck").checked;
+}
+// One tap per question: the next one starts by itself unless the learner has
+// stopped, moved on by hand, or left the page in the meantime.
+function scheduleAutoNext(ms) {
+    window.clearTimeout(autoNextTimer);
+    if (!autoNextEnabled() || demoRunning) return;
+    const serial = questionSerial;
+    autoNextTimer = window.setTimeout(() => {
+        if (serial === questionSerial && testActive && answered && !demoRunning && !document.hidden) newQuestion();
+    }, ms);
+}
+function rememberToggle(id, key) {
+    const box = document.getElementById(id);
+    try {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) box.checked = saved === "1";
+    } catch (_) {}
+    box.addEventListener("change", () => {
+        try { localStorage.setItem(key, box.checked ? "1" : "0"); } catch (_) {}
     });
 }
 function createApAnswerButtons() {
@@ -1703,7 +1553,7 @@ function createApAnswerButtons() {
 }
 async function exportApCSV() {
     const rows = await APPitchScience.allRows(AP_APP_ID, "trials");
-    const fields = ["sessionId", "day", "kind", "level", "ordinal", "pitch", "guess", "result", "correct", "rtMs", "playedAt", "submittedAt", "audibleLatencyEstimateMs", "previousPitch", "eligibleCold", "source", "resetSoundOn", "pointerTimeStamp",
+    const fields = ["protocol", "timbre", "repair", "replayed", "sessionId", "day", "kind", "level", "ordinal", "pitch", "guess", "result", "correct", "rtMs", "playedAt", "submittedAt", "audibleLatencyEstimateMs", "previousPitch", "eligibleCold", "afterBreak", "source", "resetSoundOn", "pointerTimeStamp",
         "pointerX", "pointerY", "buttonIndex", "baseLatencyRaw", "outputLatencyRaw",
         "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange"];
     const csv = [fields.join(","), ...rows.map((row) => fields.map((name) => {
@@ -1723,12 +1573,19 @@ async function refreshApHistory() {
     box.replaceChildren();
     for (const s of sessions.sort((a, b) => b.started - a.started).slice(0, 8)) {
         const p = document.createElement("p");
-        p.textContent = `${s.day} \xb7 ${s.kind} \xb7 ${s.correct}/${s.total} \xb7 ${s.medianRt == null ? "\u2014" : (s.medianRt / 1000).toFixed(2) + "s"}`;
+        const where = Array.isArray(s.effectiveRange) ? ` · ${noteName(s.effectiveRange[0])}\u2013${noteName(s.effectiveRange[1])}` : "";
+        p.textContent = `${s.day} · ${s.protocol >= 4 ? "v" + s.protocol : "legacy"} · L${s.level} · ${t({learn:"apLearn",cold:"apCold",assessment:"ap"}[s.kind] || "ap")} · ${t(s.timbre || "instrument")}${where} · ${s.correct}/${s.total} \xb7 ${s.medianRt == null ? "\u2014" : (s.medianRt / 1000).toFixed(2) + "s"}`;
+        if (s.kind === "cold" && !s.interrupted) p.textContent += ` · ${t(s.eligible ? "afterBreak" : "ordinaryCheck")}`;
+        if (s.interrupted) p.textContent += ` · interrupted (${s.attempted ?? 0}/${s.total})`;
         box.appendChild(p);
     }
 }
 
 function updatePlayButton() {
+    const shell = document.querySelector(".app-shell");
+    shell.classList.toggle("training-round", testActive && !demoRunning);
+    document.getElementById("demoButton").disabled = !ready || (testActive && !demoRunning);
+    elements.nextButton.disabled = !ready || !testActive || !answered;
     document.querySelector(".app-shell").classList.toggle("board-test",
         testActive && (testMode === "interval" || (testMode === "rpCourse" && document.getElementById("rpActivity").value === "locate")));
     elements.playButton.textContent = t(testActive ? "stop" : "play");
@@ -1740,18 +1597,21 @@ function updateIntervalPickerVisibility() {
     const visible = elements.modeSelect.value === "interval";
     elements.intervalPicker.hidden = !visible;
     elements.apPicker.hidden = !["ap", "apLearn", "apCold"].includes(elements.modeSelect.value);
-    document.getElementById("apAssessmentOptions").hidden = elements.modeSelect.value !== "ap";
+    // Sound is chosen in every AP mode, round length for learning and assessment,
+    // a response limit for the assessment only (a cold check is always 20 untimed questions).
+    document.getElementById("apAssessmentOptions").hidden = !isApMode(elements.modeSelect.value);
+    document.getElementById("apTrialsPicker").hidden = elements.modeSelect.value === "apCold";
+    document.getElementById("apTimePicker").hidden = elements.modeSelect.value !== "ap";
     refreshApCourseUI();
     if (window.RPUI) RPUI.modeChanged();
 }
 
-function intervalTargetPools(from, to, minDistance, maxDistance, direction, excludedTarget = null) {
+function intervalTargetPools(from, to, minDistance, maxDistance, direction) {
     // Collect only feasible target/reference choices; no retry loops, even at boundaries.
     const limit = Math.min(maxDistance ?? (to - from), to - from);
     const higher = [];
     const lower = [];
     for (let target = from; target <= to; target += 1) {
-        if (target === excludedTarget) continue;
         if (direction !== "lower") {
             const refMin = Math.max(from, target - limit);
             const refMax = target - minDistance;
@@ -1767,18 +1627,25 @@ function intervalTargetPools(from, to, minDistance, maxDistance, direction, excl
 }
 
 function pickIntervalQuestion() {
-    const pools = intervalTargetPools(minMidi, maxMidi, minIntervalSemitones,
-        maxIntervalSemitones, targetDirection, lastQuestionMidi);
-    if (!pools.length) return null;
-    // In random-both mode choose the direction first, so neither direction dominates.
-    const pool = pools[Math.floor(Math.random() * pools.length)];
-    const choice = pool[Math.floor(Math.random() * pool.length)];
-    const reference = choice.refMin + Math.floor(Math.random() * (choice.refMax - choice.refMin + 1));
-    return { target: choice.target, reference };
+    // Legacy Two notes is NOT constrained by the Relative Pitch Course's 24-semitone
+    // limit. Draw a distance first, then choose a reference valid for that distance.
+    // With Unlimited, the full selected range is usable without endpoint collapse.
+    const span = maxMidi - minMidi;
+    const maximum = Math.min(maxIntervalSemitones ?? span, span);
+    if (!Number.isInteger(span) || span < 1 || maximum < minIntervalSemitones) return null;
+    const directions = targetDirection === "both" ? ["higher", "lower"] : [targetDirection];
+    if (!directions.every(value => value === "higher" || value === "lower")) return null;
+    const distance = minIntervalSemitones + Math.floor(Math.random() * (maximum - minIntervalSemitones + 1));
+    const direction = TrainingCore.choose(directions);
+    const refMin = direction === "higher" ? minMidi : minMidi + distance;
+    const refMax = direction === "higher" ? maxMidi - distance : maxMidi;
+    if (refMin > refMax) return null;
+    const reference = refMin + Math.floor(Math.random() * (refMax - refMin + 1));
+    return {reference, target: reference + (direction === "lower" ? -distance : distance)};
 }
 
 function newQuestion() {
-    if (!ready) return;
+    if (!ready || (testActive && !answered)) return;
     TrainingTracker.activity("question");
     if (isApMode()) { startApQuestion(); return; }
     if (testMode === "rpCourse") { RPUI.startNext(); return; }
@@ -1789,7 +1656,7 @@ function newQuestion() {
 
     let target;
     if (testMode === "interval") {
-        // Choose only pairs that obey both limits, direction and non-repeating target.
+        // Draw a distance independently, then a reference that supports every allowed distance.
         const pair = pickIntervalQuestion();
         if (!pair) {
             setStatus("intervalNoRepeat");
@@ -1800,7 +1667,7 @@ function newQuestion() {
     } else {
         const targets = [];
         for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
-            if (pitch !== lastQuestionMidi) targets.push(pitch);
+            targets.push(pitch);
         }
         if (!targets.length) {
             setStatus("distinctRangeError");
@@ -1812,6 +1679,7 @@ function newQuestion() {
 
     testActive = true;
     answered = false;
+    legacyAudioReady = false;
     questionSerial += 1;
     updatePlayButton();
     currentMidi = target;
@@ -1824,10 +1692,9 @@ function newQuestion() {
         setStatus("listen");
         setAnswer("choose");
     }
-    lastQuestionMidi = target;
     drawQuestionStaff();
     updateStaffReplayAccess();
-    playQuestion();
+    playQuestion().catch(() => setStatus("audioRetry"));
 }
 
 function abandonQualifyingCold() {
@@ -1836,11 +1703,27 @@ function abandonQualifyingCold() {
         apSession.interrupted = true;
     }
 }
+function saveInterruptedApSession() {
+    if (!apSession || apSession.finished) return;
+    const session = apSession, metric = apMetricFor(session);
+    session.interrupted = true;
+    session.finished = true;
+    APPitchScience.putRows(AP_APP_ID, "sessions", [{
+        id:session.id, kind:session.kind, protocol:AP_PROTOCOL, timbre:session.timbre,
+        day:session.day, level:session.level, started:session.startAt,
+        finished:Date.now(), interrupted:true, eligible:false,
+        total:session.total, attempted:session.records.length, effectiveRange:session.effectiveRange,
+        range:[minMidi,maxMidi], limitMs:session.limitMs, known:session.known, ...metric
+    }]);
+}
 function stopTest() {
     if (testMode === "rpCourse") { RPUI.stop(); return; }
     abandonQualifyingCold();
+    saveInterruptedApSession();
     TrainingTracker.pause();
     clearApTimer();
+    window.clearTimeout(autoNextTimer);
+    setApMessage(null);
     apSession = null;
     apAudioReady = false;
     clearApFeedback();
@@ -1848,7 +1731,7 @@ function stopTest() {
         return;
     }
 
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     releaseAllKeys();
     testActive = false;
     currentMidi = null;
@@ -1884,9 +1767,11 @@ function freePlay(midi, pointerId) {
 }
 
 function answer(selectedMidi) {
+    if (!demoRunning && (!testActive || answered || !legacyAudioReady)) return;
     TrainingTracker.activity("answer");
     answered = true;
     questionSerial += 1;
+    updatePlayButton();
     updateStaffReplayAccess();
 
     const correctAnswer = selectedMidi === currentMidi;
@@ -1914,13 +1799,15 @@ function answer(selectedMidi) {
         setAnswer("raw", { text: formatAnswerText() });
         drawAnsweredStaff();
         showCorrectKeyIfHidden();
-        playQuestion();
+        playQuestion().catch(() => setStatus("audioRetry"));
     } else {
         setStatus(correctAnswer ? "correct" : "wrong", { note: targetName });
         setAnswer("raw", { text: formatAnswerText() });
         drawStaff(currentMidi);
         playTone(currentMidi);
     }
+    // A miss stays on screen until Next; a hit moves on after its feedback sound.
+    if (correctAnswer) scheduleAutoNext(testMode === "interval" ? 2000 : 1100);
 }
 
 function pressKey(midi, pointerId) {
@@ -1933,7 +1820,7 @@ function pressKey(midi, pointerId) {
     if (testActive && currentMidi !== null && !answered) {
         if (testMode === "interval" && midi === currentReferenceMidi) {
             // A marked reference key is a replay control, not a valid answer.
-            playTone(currentReferenceMidi);
+            playQuestion().catch(() => setStatus("audioRetry"));
         } else {
             answer(midi);
         }
@@ -1949,12 +1836,10 @@ function pressKey(midi, pointerId) {
 }
 
 function applySettings() {
+    if (player) player.cancelQueue(audioContext);
+    TrainingCore.cancelAudio();
     abandonQualifyingCold();
-    // Cold checks use a fixed complete two-octave pool on both sites.
-    if (elements.modeSelect.value === "apCold") {
-        elements.startNote.value = String(AP_COLD_MIN_MIDI);
-        elements.endNote.value = String(AP_COLD_MAX_MIDI);
-    }
+    saveInterruptedApSession();
     if (elements.instrumentSelect.value === "violin" && !violinReady) {
         setControlsEnabled(false);
         setStatus("loadingViolin");
@@ -2003,14 +1888,11 @@ function applySettings() {
             setStatus("intervalNoPairs");
             return;
         }
-        if (new Set(pools.flat().map((candidate) => candidate.target)).size < 2) {
-            setStatus("intervalNoRepeat");
-            return;
-        }
+    
     }
 
     if (window.RPUI) RPUI.configurationApplied();
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     instrumentMode = elements.instrumentSelect.value;
     document.getElementById("helpText").textContent = t("hint");
     minMidi = rpConfig ? SUPPORTED_MIN_MIDI : startMidi;
@@ -2019,6 +1901,8 @@ function applySettings() {
     clefMode = elements.clefSelect.value;
     testMode = elements.modeSelect.value;
     clearApTimer();
+    window.clearTimeout(autoNextTimer);
+    setApMessage(null);
     apSession = null;
     apAudioReady = false;
     clearApFeedback();
@@ -2102,10 +1986,12 @@ function populateSelectors() {
 }
 
 function initializeAudio() {
+    document.getElementById("audioReload").hidden=true;
     setStatus("loadingViolin");
     setControlsEnabled(false);
     if (player === null) {
         setStatus("audioError");
+        document.getElementById("audioReload").hidden=false;
         return;
     }
     loadViolinPreset().then(() => {
@@ -2114,16 +2000,40 @@ function initializeAudio() {
         setStatus("ready");
         setAnswer("free");
         document.getElementById("demoButton").disabled = false;
-        updateApView();
+        updatePlayButton();updateApView();
     }).catch(() => {
-        setStatus("audioError");
+        setStatus("audioError");document.getElementById("audioReload").hidden=false;
     });
 }
 
 function registerServiceWorker() {
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./service-worker.js");
-    }
+    if (!("serviceWorker" in navigator)) return;
+    const button = document.getElementById("updateButton");
+    let reloading = false, lastCheck = Date.now();
+    // A new version never takes over during training. It waits until the learner
+    // taps the button (outside a round) or closes every window of the app.
+    const offer = (registration) => {
+        if (!registration.waiting || !navigator.serviceWorker.controller) return;
+        button.hidden = false;
+        button.onclick = () => {
+            if (testActive || demoRunning || !registration.waiting) return;
+            reloading = true; button.disabled = true;
+            registration.waiting.postMessage({type: "SKIP_WAITING"});
+        };
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloading) location.reload(); });
+    navigator.serviceWorker.register("./service-worker.js").then((registration) => {
+        offer(registration);
+        registration.addEventListener("updatefound", () => {
+            const worker = registration.installing;
+            if (worker) worker.addEventListener("statechange", () => { if (worker.state === "installed") offer(registration); });
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden || testActive || Date.now() - lastCheck < 3600000) return;
+            lastCheck = Date.now();
+            registration.update().catch(() => {});
+        });
+    }).catch(() => {});
 }
 
 const unlessDemo = (callback) => (event) => {
@@ -2147,7 +2057,7 @@ apLevelSelect.addEventListener("change", unlessDemo(() => {
     const selected = Number(apLevelSelect.value);
     if (!Number.isInteger(selected) || selected < 1 || selected > 12) return;
     apCourse.level = selected;
-    apCourse.courseVersion = 3;
+    apCourse.courseVersion = 4;
     APPitchScience.saveCourse(AP_APP_ID, apCourse);
     apSession = null;
     testActive = false;
@@ -2156,17 +2066,9 @@ apLevelSelect.addEventListener("change", unlessDemo(() => {
 }));
 elements.applyButton.addEventListener("click", unlessDemo(applySettings));
 elements.modeSelect.addEventListener("change", unlessDemo(() => {
-    const chosen = elements.modeSelect.value;
-    if (chosen === "apCold") {
-        elements.startNote.value = String(AP_COLD_MIN_MIDI);
-        elements.endNote.value = String(AP_COLD_MAX_MIDI);
-    }
-    if (chosen === "apLearn" &&
-        Number(elements.endNote.value) - Number(elements.startNote.value) < 23) {
-        elements.startNote.value = "55";
-        elements.endNote.value = "88";
-    }
-    updateIntervalPickerVisibility();
+    // Respect the explicitly selected range in every mode, the cold check included:
+    // nothing rewrites From/To when the mode changes.
+    if (ready) applySettings(); else updateIntervalPickerVisibility();
 }));
 elements.playButton.addEventListener("click", unlessDemo(() => {
     if (testActive) stopTest();
@@ -2191,6 +2093,7 @@ function invalidateHiddenAp() {
 }
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
+        if (testActive && !isApMode() && testMode !== "rpCourse" && !demoRunning) stopTest();
         invalidateHiddenAp();
         releaseAllKeys();
         if (demoRunning) {
@@ -2200,33 +2103,58 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("blur", () => {
     invalidateHiddenAp();
+    if (testActive && !isApMode() && testMode !== "rpCourse" && !demoRunning) stopTest();
     releaseAllKeys();
 });
 window.addEventListener("pagehide", abandonQualifyingCold);
 
+document.getElementById("audioReload").addEventListener("click", () => location.reload());
+document.getElementById("appVersion").textContent = APP_VERSION;
 populateSelectors();
 createApAnswerButtons();
+rememberToggle("apMaskCheck", AP_MASK_KEY);
+rememberToggle("autoNextCheck", AUTO_NEXT_KEY);
 RPUI.init();
 document.getElementById("apExportButton").addEventListener("click", exportApCSV);
 document.getElementById("apRepeatNote").addEventListener("click", unlessDemo(() => {
-    if (testMode === "apLearn" && apSession && !apSession.finished && answered && !apFeedbackPlaying && currentMidi !== null) {
-        TrainingTracker.activity("ap-learning");
-        playTone(currentMidi);
+    if (testMode !== "apLearn" || !apSession || apSession.finished || apFeedbackPlaying || currentMidi === null) return;
+    TrainingTracker.activity("ap-learning");
+    if (answered) playTone(currentMidi).catch(() => setStatus("audioRetry"));
+    else if (apAudioReady) {
+        apSession.replayed=(apSession.replayed||0)+1;apAudioReady=false;updateApView();
+        playApPitch(currentMidi,questionSerial,false).catch(()=>setStatus("audioRetry"));
     }
 }));
+window.addEventListener("training-storage-error", () => {
+    const warning=document.getElementById("storageWarning");warning.hidden=false;warning.textContent=t("storageWarning");
+});
+
 refreshApHistory();
 updateIntervalPickerVisibility();
 setLanguage(resolveInitialLanguage());
 drawKeyboard();
 drawStaff();
+function redrawViolinBoard() {
+    releaseAllKeys();
+    drawKeyboard();
+    if (testActive && testMode === "interval" && currentReferenceMidi !== null) markPitch(currentReferenceMidi,"reference");
+    if (testActive && ["single","interval"].includes(testMode) && answered && currentMidi !== null) markPitch(currentMidi,"correct");
+    if (testMode === "rpCourse") RPUI.redraw();
+}
+if (window.ResizeObserver) {
+    // v2.3.1 drew the board 300 px wide whenever it was hidden at draw time (after any AP
+    // mode): the E string was cut off on 320 px screens and a blank strip appeared on wider ones.
+    new ResizeObserver(() => {
+        const width = elements.keyboardScroller.clientWidth;
+        if (instrumentMode !== "violin" || demoRunning || !width || width === violinDrawnWidth) return;
+        redrawViolinBoard();
+    }).observe(elements.keyboardScroller);
+}
 window.addEventListener("resize", () => {
     if (demoRunning) return;
     const previousOffset = elements.keyboardScroller.scrollLeft;
     if (instrumentMode === "violin") {
-        releaseAllKeys();
-        drawKeyboard();
-        if (testActive && currentReferenceMidi !== null) markPitch(currentReferenceMidi,"reference");
-        if (testActive && answered && currentMidi !== null) markPitch(currentMidi,"correct");
+        redrawViolinBoard();
         return;
     }
     const oldMinX = keyboardMinX;
@@ -2287,7 +2215,7 @@ function sleep(ms) {
 
 function cancelDemo() {
     demoCancelled = true;
-    if (player) player.cancelQueue(audioContext);
+    if (player) player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     if (demoTimer !== null) {
         window.clearInterval(demoTimer);
         demoTimer = null;
@@ -2453,7 +2381,7 @@ function renderDemoChord(events) {
 async function playViolinConcertoDemo() {
     await ensureAudio();
     if (demoCancelled) return;
-    player.cancelQueue(audioContext);
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     buildDemoMusicPointers();
     setStatus("demoTitle");
     const data = window.DEMO_SCORE_DATA;
@@ -2481,7 +2409,7 @@ async function playViolinConcertoDemo() {
                     (event.end - event.start) * secondsPerTick - DEMO_GAP_SECONDS
                 );
                 player.queueWaveTable(
-                    audioContext, audioContext.destination, selectedPreset(),
+                    audioContext, audioContext.destination, demoPreset(),
                     startTime + event.start * secondsPerTick,
                     event.midi, duration, event.volume
                 );
@@ -2533,7 +2461,7 @@ function captureDemoSnapshot() {
         state: { testActive, answered, currentMidi, currentReferenceMidi },
         ap: {session: apSession ? { ...apSession, records: apSession.records.map((entry) => ({...entry})) } : null,
             remainingMs: apDeadline === null ? null : Math.max(0, apDeadline - Date.now()),
-            audioReady: apAudioReady},
+            audioReady: apAudioReady, message: apMessageBuild},
         status: { ...statusMessage },
         answer: { ...answerMessage },
         keyClasses: [...keyElements.entries()].map(([midi, element]) => ({
@@ -2577,6 +2505,7 @@ function restoreDemoSnapshot(snapshot) {
     currentReferenceMidi = state.currentReferenceMidi;
     apSession = snapshot.ap.session;
     apAudioReady = snapshot.ap.audioReady;
+    setApMessage(snapshot.ap.message);
     if (apSession && isApMode() && testActive && !answered && snapshot.ap.remainingMs !== null) {
         const remaining = Math.max(1, snapshot.ap.remainingMs);
         apDeadline = Date.now() + remaining;
@@ -2605,7 +2534,7 @@ function restoreDemoSnapshot(snapshot) {
 
 async function runDemo() {
     if (!ready || demoRunning) return;
-    if (isApMode() && testActive) { setStatus("apBlockedDuringTest"); return; }
+    if (testActive) { setStatus("apBlockedDuringTest"); return; }
     APPitchScience.markPractice(AP_APP_ID);
     TrainingTracker.pause();
     const snapshot = captureDemoSnapshot();
@@ -2619,7 +2548,7 @@ async function runDemo() {
     try {
         await ensureAudio();
         if (demoCancelled) return;
-        player.cancelQueue(audioContext);
+        player.cancelQueue(audioContext); TrainingCore.cancelAudio();
         releaseAllKeys();
         elements.startNote.value = String(midiFromName("C4"));
         elements.endNote.value = String(midiFromName("B4"));
@@ -2712,7 +2641,7 @@ async function runDemo() {
             demoTimer = null;
         }
         demoResolve = null;
-        player.cancelQueue(audioContext);
+        player.cancelQueue(audioContext); TrainingCore.cancelAudio();
         demoSelectedOctave = null;
         demoRunning = false;
         demoCancelled = false;

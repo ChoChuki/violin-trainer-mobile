@@ -288,3 +288,86 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .violin-step-label {position:absolute;left:2px;width:20px;text-align:center;font-size:10px;color:#78716c;font-weight:700;pointer-events:none;}
 .keyboard-card:has(.violin-board) .keyboard-scroller{overflow-x:hidden;overflow-y:visible;}
 @media (max-width:390px){.keyboard-card:has(.violin-board){padding:5px;}}
+
+/* Training focus: controls stay reachable; no staff or target-dependent layout. */
+[hidden] { display:none!important; }
+.app-header small { font-size:10px; color:#64748b; font-weight:500; }
+#storageWarning { color:#991b1b; background:#fee2e2; padding:8px; }
+.training-round .settings-card, .training-round .tracker-strip,
+.training-round .ap-history-panel, .training-round .rp-config,
+.training-round .rp-timbre, .training-round #rpExamples,
+.training-round .rp-history, .training-round #rpIntro { display:none; }
+.training-round .controls { grid-template-columns:1fr 1fr; position:sticky; top:0; z-index:6; background:#f4f5f7; padding:4px 0; }
+.training-round #demoButton { display:none; }
+.controls { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.controls button, .rp-audio-controls button, .ap-repeat-note, .rp-sample { min-height:44px; }
+.status { height:auto; min-height:36px; }
+.rp-timbre { display:flex; align-items:center; gap:8px; font-size:12px; margin-top:5px; }
+.rp-timbre select { flex:1; }
+.rp-progress { min-height:50px; }
+.ap-answer-buttons { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.ap-note-button { min-height:50px; }
+.rp-position .rp-reference { position:sticky; top:55px; z-index:5; }
+.answer-card:has(#referenceChip:not([hidden])) { position:sticky; top:55px; z-index:5; }
+#staff { display:none!important; }
+.training-round .app-header .status { display:none; }
+.training-round .app-header h1 { font-size:16px; }
+.training-round .app-header { margin-bottom:2px; }
+.training-round .answer-text { height:30px; line-height:26px; font-size:14px; }
+.training-round .answer-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; }
+.training-round .answer-card .answer-text { width:100%; }
+.training-round .answer-card #intervalReplayButton { min-height:36px; margin:2px; }
+.training-round.rp-position .answer-card { display:none; }
+.training-round.rp-position .rp-progress { min-height:36px; }
+.training-round.rp-position #rpReference { padding:3px 8px; }
+.training-round.rp-position .rp-audio-controls button { min-height:36px; }
+.keyboard.violin-board .violin-note { min-height:0; }
+
+/* v20.0 / v2.4.0: one visible prompt per mode, one tap per question, no scrolling in a round. */
+.app-header small { font-variant-numeric: tabular-nums; }
+.update-button { display:block; margin:4px auto 0; min-height:32px; padding:0 12px; font-size:12px; color:#1d4ed8; border-color:#93c5fd; background:#eff6ff; }
+.update-button[hidden], .training-round .update-button, .demo-running .update-button { display:none; }
+.option-row { grid-column:1/-1; display:flex; align-items:flex-start; gap:8px; font-size:12px; line-height:1.4; color:#374151; }
+.option-row input { width:18px; height:18px; margin:0; flex-shrink:0; }
+.training-round .header-top { display:none; }
+.training-round .app-header { margin-bottom:2px; }
+.training-round .app-header .status { display:block; height:auto; min-height:0; margin:0; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* AP and RP rounds show their own prompt and feedback beside the answers. */
+.training-round.ap-mode .app-header, .training-round.rp-mode .app-header { display:none; }
+.training-round.ap-mode .controls { position:static; }
+.ap-message { margin:0 0 8px; min-height:38px; font-size:14px; line-height:19px; font-weight:700; color:#1f2937; }
+.ap-complete .ap-message { min-height:0; }
+.ap-note-button.ap-picked { background:#dbeafe; border-color:#60a5fa; }
+.ap-note-button.ap-right, .rp-choice.rp-right { background:#bbf7d0; border-color:#16a34a; }
+.ap-note-button.ap-wrong, .rp-choice.rp-wrong { background:#fecaca; border-color:#dc2626; }
+.ap-note-button.ap-picked:disabled, .ap-note-button.ap-right:disabled, .ap-note-button.ap-wrong:disabled,
+.rp-choice.rp-picked:disabled, .rp-choice.rp-right:disabled, .rp-choice.rp-wrong:disabled { opacity:1; }
+.ap-study-octaves { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:11px; font-weight:700; color:#475569; }
+.ap-study-octave { min-height:32px; padding:0 9px; font-size:12px; }
+.ap-study-octave.current { color:#1d4ed8; background:#eff6ff; border-color:#93c5fd; }
+.ap-study-note.fresh { background:#fffbeb; border-color:#f59e0b; }
+.rp-produce { display:grid; gap:7px; margin:7px 0; }
+.rp-produce[hidden], .rp-produce-rate[hidden] { display:none!important; }
+.rp-produce-prompt { margin:0; padding:8px 10px; font-size:15px; line-height:1.35; font-weight:800; color:#1e3a8a; background:#eff6ff; border-radius:8px; }
+.rp-produce-rate { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.rp-produce button { min-height:48px; }
+.rp-mic { margin-top:6px; }
+.rp-focus { font-weight:700; color:#334155; }
+/* Board rounds: prompt, reference chip and Replay share one row above the board. */
+.training-round .answer-card { flex-wrap:nowrap; min-height:40px; }
+.training-round .answer-card .answer-text { width:auto; flex:1 1 auto; font-size:13px; }
+.training-round .reference-chip { max-width:46%; }
+.ap-configuration { grid-column:1/-1; grid-template-columns:repeat(auto-fit,minmax(92px,1fr)); align-items:end; }
+.ap-configuration .ap-picker[hidden] { display:none; }
+/* Idle: Play stays reachable at the bottom edge even when the settings are taller than the screen. */
+.app-shell:not(.training-round) .controls { position:sticky; bottom:0; z-index:5; margin:2px 0; padding:6px 0 calc(6px + env(safe-area-inset-bottom, 0px)); background:#f4f5f7; }
+.training-round .answer-card .answer-text { height:auto; max-height:32px; line-height:16px; white-space:normal; text-align:left; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+/* RP locate: counter, reference and Replay share the space above the board; nothing moves after a tap. */
+.training-round.rp-position .rp-panel { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; align-items:center; padding:5px 9px; }
+.training-round.rp-position .rp-progress { grid-column:1/-1; min-height:0; padding:0; font-size:12px; }
+.training-round.rp-position .rp-progress span { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.training-round.rp-position #rpReference { position:static; margin:0; padding:6px 8px; }
+.training-round.rp-position .rp-audio-controls { flex-wrap:nowrap; }
+.training-round.rp-position .rp-audio-controls button { flex:0 0 auto; min-height:36px; }
+.training-round.rp-position .answer-card { display:none; }
+.training-round .interval-replay-button { min-height:40px; min-width:48px; }

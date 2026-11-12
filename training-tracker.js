@@ -18,7 +18,7 @@
     catch (_) { stored = {}; }
     const state = {endpoint: stored.endpoint || '', key: stored.key || '',
         segments: Array.isArray(stored.segments) ? stored.segments : [],
-        pending: Array.isArray(stored.pending) ? stored.pending : [], remote: stored.remote || null};
+        pending: [...(Array.isArray(stored.pending) ? stored.pending : []), ...(stored.checkpoint && stored.checkpoint.end > stored.checkpoint.start ? [stored.checkpoint] : [])], remote: stored.remote || null};
     let active = null, lastAction = 0, uploadBusy = false, pollBusy = false;
     const LANGUAGE_TEXT = {
       "en": ["Training time sync", "Shared Cloudflare Worker HTTPS URL", "Personal pairing code (same on both sites and devices)", "Save sync settings", "Copy pairing code", "Local only · not synced", "Cloud sync configured", "Active training", "min", "Pending uploads", "Not configured: sites and devices cannot share progress.", "Pairing code copied; paste the same code in your other site/device.", "Settings saved. Syncing…", "Saved as local-only time.", "Enter an HTTPS URL and a 32-digit hexadecimal pairing code.", "Historical overdue", "Exempt"],
@@ -39,7 +39,23 @@
         render();
     }
 
-    const save = () => { try {localStorage.setItem(STORAGE, JSON.stringify(state));} catch (_) {} };
+    function mergeSegments(rows) {
+        const merged = new Map();
+        for (const row of rows) {
+            const old=merged.get(row.id);
+            if (!old || row.end>old.end) merged.set(row.id,row);
+        }
+        return [...merged.values()];
+    }
+    const save = () => {
+        try {
+            const disk=JSON.parse(localStorage.getItem(STORAGE)||'{}');
+            state.segments=mergeSegments([...(disk.segments||[]),...state.segments]);
+            const done=new Map(state.segments.map(row=>[row.id,row.end]));
+            state.pending=mergeSegments([...(disk.pending||[]),...state.pending]).filter(row=>!done.has(row.id)||done.get(row.id)<row.end);
+            localStorage.setItem(STORAGE,JSON.stringify({...state,checkpoint:active ? {...active} : null}));
+        } catch (_) {TrainingCore.storageError();}
+    };
     const keyPattern = /^[a-f0-9]{32}$/i;
     const id = () => typeof crypto.randomUUID === 'function' ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -68,12 +84,12 @@
     }
     function activity(kind) {
         if (!['question','answer','free-play','ap-learning','ap-check','ap-answer','staff-replay'].includes(kind)) return;
-        if (document.hidden) return;
+        if (document.hidden || document.querySelector('.app-shell.demo-running')) return;
         const now = Date.now();
         if (active && (now - lastAction >= IDLE || now - active.start >= SEGMENT_MAX)) endActive();
         lastAction = now;
         if (!active) active = {id:id(), start:now,end:now};
-        render();
+        save();render();
     }
     function pause() { endActive(); lastAction = 0; render(); }
     function tick() {

@@ -47,8 +47,9 @@
     de:['Prime','Kleine Sekunde','Große Sekunde','Kleine Terz','Große Terz','Quarte','Tritonus','Quinte','Kleine Sexte','Große Sexte','Kleine Septime','Große Septime','Oktave'],
     it:['Unisono','Seconda minore','Seconda maggiore','Terza minore','Terza maggiore','Quarta giusta','Tritono','Quinta giusta','Sesta minore','Sesta maggiore','Settima minore','Settima maggiore','Ottava'],
     el:['Ταυτοφωνία','Μικρή 2η','Μεγάλη 2η','Μικρή 3η','Μεγάλη 3η','Καθαρή 4η','Τρίτονο','Καθαρή 5η','Μικρή 6η','Μεγάλη 6η','Μικρή 7η','Μεγάλη 7η','Οκτάβα']};
+  const PROTOCOL = 5; // 5: direction-specific references, real weak-interval review, auto-continue, production
   const rand = n => Math.floor(Math.random()*n);
-  const T = (lang,key) => (LOCALES[lang]||LOCALES.en)[key]||LOCALES.en[key]||key;
+  const T = (lang,key) => root.TrainingCopy?.text(lang,key)||(LOCALES[lang]||LOCALES.en)[key]||LOCALES.en[key]||key;
   const name = (distance,lang) => distance<=12 ? ((TXT[lang]||TXT.en)[distance]||SHORT[distance]) : SHORT[distance];
   const label = (distance,lang) => `${SHORT[distance]} · ${distance}`;
   function referencePool(low,high,distances,direction) {
@@ -58,54 +59,100 @@
     const maxRef = high-(direction==='higher'||direction==='both'?max:0);
     return Array.from({length:Math.max(0,maxRef-minRef+1)},(_,i)=>minRef+i);
   }
-  function categoryWeights(level,activity,history) {
-    const distances=LEVELS[level].distances;
-    if (activity==='test'||activity==='locate'||activity==='melody') return distances.map(()=>1);
-    // Instrument-position errors do not measure interval-name recognition.
-    // Keep these skills in separate adaptive evidence pools.
-    const rows = (history||[]).filter(r=>r.level===level && ['practice','review'].includes(r.activity)).slice(-200);
-    return distances.map(d=>{
-      const recent=rows.filter(r=>r.distance===d).slice(-20);
-      const errors=recent.filter(r=>!r.correct).length;
-      const smoothed=(errors+1)/(recent.length+2);
-      const focus = activity==='review' ? 3 : 1.5;
-      return 1 + focus * smoothed;
-    });
-  }
-  function weightedChoice(items,weights) {const total=weights.reduce((a,b)=>a+b,0);let r=Math.random()*total; for(let i=0;i<items.length;i++){r-=weights[i];if(r<0)return items[i];}return items[items.length-1];}
-  function createRound({level=1,activity='practice',direction='both',low=55,high=88,total=12,history=[]}) {
-    const cfg=LEVELS[level]; if(!cfg || total<1||total>200) return {error:'invalid'};
-    const dirs=cfg.directionOnly?['higher','lower']:direction==='both'?['higher','lower']:[direction];
-    const pool=referencePool(low,high,cfg.distances, direction);
-    if(!pool.length) return {error:'no-reference-pool'};
-    const weights=categoryWeights(level,activity,history);
-    const questions=[];
-    for (let i=0;i<total;i++) {
-      let distance;
-      let dir;
-      if(cfg.directionOnly) {
-        const kind=rand(3);
-        dir=kind===0?'same':kind===1?'higher':'lower';
-        distance=dir==='same'?0:cfg.distances.slice(1)[rand(cfg.distances.length-1)];
-      } else {
-        distance=weightedChoice(cfg.distances,weights);
-        dir=distance===0?'same':dirs[rand(dirs.length)];
-      }
-      const reference=pool[rand(pool.length)];
-      const signed=dir==='lower'?-distance:distance;
-      const target=reference+signed;
-      if(target<low||target>high) return {error:'invalid-target'};
-      const first=activity==='melody' ? reference+(Math.random()<.5?-2:2) : null;
-      // Keep melody preparation within the instrument, independent of actual answer.
-      const prelude=first!==null && first>=low&&first<=high?first:reference;
-      questions.push({reference,target,distance,signed,direction:dir,prelude:activity==='melody'?prelude:null});
+  const memoryKey=q=>`${q.direction}:${q.distance}`;
+  // Weak-interval review. Weights follow the recent miss rate of each
+  // direction+distance and add the intervals it was recently mistaken for, so a
+  // round contrasts the pairs that are actually confused by ear.
+  function reviewWeights(memory,distances,directions) {
+    const items=new Map();
+    for(const dir of directions)for(const distance of distances){
+      const d=distance===0?'same':dir;items.set(`${d}:${distance}`,{dir:d,distance,key:`${d}:${distance}`});
     }
-    return {level,activity,direction,questions,index:0,records:[],createdAt:Date.now(),finished:false,
-      total,low,high,standard:activity==='test'&&pool.length>=4};
+    const miss=item=>{const m=TrainingCore.recentMiss(memory[item.key]);return m===null?.3:m;};
+    const bonus={};
+    for(const item of items.values())for(const [other,count] of Object.entries(memory[item.key]?.conf||{})){
+      const partner=`${Number(other)===0?'same':item.dir}:${other}`;
+      if(items.has(partner))bonus[partner]=(bonus[partner]||0)+2*Math.min(1,count/3)*miss(item);
+    }
+    return [...items.values()].map(item=>({...item,known:!!memory[item.key],miss:miss(item),
+      weight:.3+6*miss(item)+(bonus[item.key]||0)}));
+  }
+  function focusList(memory,level,direction='both') {
+    const cfg=LEVELS[level];if(!cfg||cfg.directionOnly)return [];
+    const directions=direction==='both'?['higher','lower']:[direction];
+    return reviewWeights(memory,cfg.distances,directions).filter(x=>x.known&&x.miss>=.2)
+      .sort((a,b)=>b.weight-a.weight).slice(0,3);
+  }
+  function question({level=1,activity='practice',direction='both',low=55,high=88,memory={},repair=null}) {
+    const cfg=LEVELS[level];
+    if (!cfg || !['higher','lower','both'].includes(direction)) return null;
+    const directions=cfg.directionOnly?['both']:direction==='both'?['higher','lower']:[direction];
+    const feasible=directions.filter(dir=>referencePool(low,high,cfg.distances,dir).length);
+    if (!feasible.length) return null;
+    let dir=TrainingCore.choose(feasible),distance;
+    if (cfg.directionOnly) {
+      dir=TrainingCore.choose(['same','higher','lower']);
+      distance=dir==='same'?0:TrainingCore.choose([1,2]);
+    } else if (activity==='review') {
+      const plan=reviewWeights(memory,cfg.distances,feasible);
+      const pick=TrainingCore.choose(plan,plan.map(item=>item.weight));
+      distance=pick.distance;dir=pick.dir==='same'?dir:pick.dir;
+      if (distance===0) dir='same';
+    } else {
+      const weights=cfg.distances.map(d=>['practice','produce'].includes(activity)
+          ? TrainingCore.weight(memory[`${d===0?'same':dir}:${d}`]) : 1);
+      distance=TrainingCore.choose(cfg.distances,weights);
+      if (distance===0) dir='same';
+    }
+    if (repair && activity!=='test') {const parts=repair.split(':');dir=parts[0];distance=Number(parts[1]);}
+    // The reference comes from every note that supports all distances of the level in
+    // the drawn direction. The distance stays independent of the reference, while the
+    // references cover a wider register than the old "both directions" intersection.
+    const poolDirection=cfg.directionOnly?'both':dir==='same'?(direction==='both'?TrainingCore.choose(feasible):direction):dir;
+    const pool=referencePool(low,high,cfg.distances,poolDirection);
+    if (!pool.length) return null;
+    const reference=TrainingCore.choose(pool),signed=dir==='lower'?-distance:distance;
+    const prelude=activity==='melody'?TrainingCore.choose([-2,-1,1,2].map(d=>reference+d).filter(m=>m>=low&&m<=high)):null;
+    return {reference,target:reference+signed,distance,signed,direction:dir,prelude,repair:!!repair};
+  }
+  function createRound({level=1,activity='practice',direction='both',low=55,high=88,total=12,memory={}}) {
+    if (!Number.isInteger(total)||total<1||total>200) return {error:'invalid'};
+    const options={level,activity,direction,low,high,memory};
+    const questions=Array.from({length:total},()=>question(options));
+    if (questions.some(q=>!q)) return {error:'no-reference-pool'};
+    return {level,activity,direction,questions,records:[],repairs:[],createdAt:Date.now(),finished:false,total,low,high,protocol:PROTOCOL};
   }
   const storageKey=id=>`rp-course-v2-${id}`;
-  function load(id) {try {const value=JSON.parse(localStorage.getItem(storageKey(id))||'null');if(value&&Array.isArray(value.records))return {level:value.level??1, records:value.records.slice(-1500),sessions:(value.sessions||[]).slice(-200)};}catch(_){}return {level:1,records:[],sessions:[]};}
-  function save(id,state) {try {localStorage.setItem(storageKey(id),JSON.stringify({level:state.level,records:state.records.slice(-1500),sessions:state.sessions.slice(-200)}));}catch(_){} }
-  function csv(records) {const keys=['day','site','level','activity','direction','reference','target','distance','signed','selected','selectedMidi','correct','replayed','hints','rtMs','time','id'];return ['\ufeff'+keys.join(','),...(records||[]).map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');}
-  root.RelativePitchCourse=Object.freeze({LEVELS,SHORT,T,name,label,referencePool,createRound,load,save,csv});
+  function load(id) {
+    try {const v=JSON.parse(localStorage.getItem(storageKey(id))||'null');
+      if(v&&Array.isArray(v.records))return {...v,level:v.level??1,sessions:v.sessions||[],memory:v.memory||{}};
+    }catch(_){}return {level:1,records:[],sessions:[],memory:{}};
+  }
+  // Keep all original localStorage rows as an unchanged legacy archive. New
+  // trial/session rows go to IndexedDB; preferences and memory remain small.
+  const archives=new Map(),writes=new Map();
+  async function hydrate(id,state) {
+    const [trials,sessions]=await Promise.all([
+      APPitchScience.allRows(id,'trials','rp'),APPitchScience.allRows(id,'sessions','rp')]);
+    const merge=(a,b)=>[...new Map(a.concat(b).map((r,i)=>[r.id||`legacy-${i}`,r])).values()];
+    state.records=merge(state.records,trials);state.sessions=merge(state.sessions,sessions);
+    return state;
+  }
+  function save(id,state) {
+    if(!archives.has(id)){const old=load(id);archives.set(id,{records:old.records,sessions:old.sessions});}
+    return TrainingCore.write(storageKey(id),{...state,...archives.get(id)});
+  }
+  function append(id,store,row) {
+    const pending=(writes.get(id)||Promise.resolve()).then(()=>APPitchScience.putRows(id,store,[row],'rp'));
+    writes.set(id,pending);return pending;
+  }
+  async function history(id) {
+    await (writes.get(id)||Promise.resolve());return hydrate(id,load(id));
+  }
+  function levelName(index,lang) {
+    const cfg=LEVELS[index];
+    return cfg.directionOnly?T(lang,'rpDirections'):`${Math.min(...cfg.distances)}–${Math.max(...cfg.distances)} ${T(lang,'rpSemitones')}`;
+  }
+  function csv(records) {const keys=['protocol','sessionId','timbre','repair','day','site','level','activity','direction','reference','target','distance','signed','selected','selectedMidi','correct','replayed','hints','rtMs','time','id','checkedBy','producedMidi','cents'];return ['\ufeff'+keys.join(','),...(records||[]).map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');}
+  root.RelativePitchCourse=Object.freeze({LEVELS,SHORT,PROTOCOL,T,name,label,referencePool,reviewWeights,focusList,createRound,question,memoryKey,levelName,load,save,hydrate,append,history,csv});
 })(typeof window!=='undefined'?window:globalThis);
