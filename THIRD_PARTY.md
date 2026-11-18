@@ -18,3 +18,5 @@ SHA-256 of downloaded runtime assets:
 - `WebAudioFontPlayer.js`: `f3f3bae5fa47140eecc0c72834d3b4eaed16ca108f891456aa2625b86d3fb07f`
 - `0000_JCLive_sf2_file.js`: `201b5e975e6dfd30937c2c153f226e2ca5e0c413b778b5a4a22318d24381765a`
 - `0400_JCLive_sf2_file.js`: `923d2f2a05ad6847a662fd3e7fd14599426dfc7d711e064e1d5d54acaa398166`
+
+Focused AP recordings: University of Iowa Musical Instrument Samples, Lawrence Fritts. [Source, permission and processing](ap-audio/README.md) · [individual recording metadata](ap-audio/sources.json).

@@ -1,4 +1,4 @@
-const APP_VERSION = "2.4.1";
+const APP_VERSION = "2.5.0";
 const PLAY_DURATION = 0.7;
 const SUPPORTED_MIN_MIDI = 55;
 const SUPPORTED_MAX_MIDI = 88;
@@ -274,6 +274,8 @@ function resolveInitialLanguage() {
 }
 
 function t(key, args = {}) {
+    if (key === "apFocus" || key === "apConsolidate")
+        return APFocusCopy.t(currentLanguage, key === "apFocus" ? "focus" : "consolidate", args);
     if (instrumentMode === "violin") {
         if (key === "choose") key = "chooseViolin";
         if (key === "hint") key = "violinHint";
@@ -370,6 +372,7 @@ function setLanguage(language) {
     document.getElementById("updateButton").textContent = t("updateReady");
     if (apMessageBuild) setApMessage(apMessageBuild);
     if (window.RPUI) RPUI.changedLanguage();
+    APFocus.translate();
     renderApMemory();
 }
 function noteName(midi) {
@@ -1555,7 +1558,8 @@ async function exportApCSV() {
     const rows = await APPitchScience.allRows(AP_APP_ID, "trials");
     const fields = ["protocol", "timbre", "repair", "replayed", "sessionId", "day", "kind", "level", "ordinal", "pitch", "guess", "result", "correct", "rtMs", "playedAt", "submittedAt", "audibleLatencyEstimateMs", "previousPitch", "eligibleCold", "afterBreak", "source", "resetSoundOn", "pointerTimeStamp",
         "pointerX", "pointerY", "buttonIndex", "baseLatencyRaw", "outputLatencyRaw",
-        "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange"];
+        "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange",
+        "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing"];
     const csv = [fields.join(","), ...rows.map((row) => fields.map((name) => {
         const v = row[name] === undefined || row[name] === null ? "" : String(row[name]);
         return `"${v.replaceAll('"', '""')}"`;
@@ -1574,8 +1578,8 @@ async function refreshApHistory() {
     for (const s of sessions.sort((a, b) => b.started - a.started).slice(0, 8)) {
         const p = document.createElement("p");
         const where = Array.isArray(s.effectiveRange) ? ` · ${noteName(s.effectiveRange[0])}\u2013${noteName(s.effectiveRange[1])}` : "";
-        p.textContent = `${s.day} · ${s.protocol >= 4 ? "v" + s.protocol : "legacy"} · L${s.level} · ${t({learn:"apLearn",cold:"apCold",assessment:"ap"}[s.kind] || "ap")} · ${t(s.timbre || "instrument")}${where} · ${s.correct}/${s.total} \xb7 ${s.medianRt == null ? "\u2014" : (s.medianRt / 1000).toFixed(2) + "s"}`;
-        if (s.kind === "cold" && !s.interrupted) p.textContent += ` · ${t(s.eligible ? "afterBreak" : "ordinaryCheck")}`;
+        p.textContent = `${s.day} · ${s.protocol >= 4 ? "v" + s.protocol : "legacy"} · L${s.level} · ${t({learn:"apLearn",cold:"apCold",consolidate:"apConsolidate",assessment:"ap"}[s.kind] || "ap")} · ${(APFocusModel.isFocus(s) ? APFocusCopy.t(currentLanguage,s.source) : t(s.timbre || "instrument"))}${where} · ${s.correct}/${s.total} \xb7 ${s.medianRt == null ? "\u2014" : (s.medianRt / 1000).toFixed(2) + "s"}`;
+        if (s.kind === "cold" && !s.interrupted && !APFocusModel.isFocus(s)) p.textContent += ` · ${t(s.eligible ? "afterBreak" : "ordinaryCheck")}`;
         if (s.interrupted) p.textContent += ` · interrupted (${s.attempted ?? 0}/${s.total})`;
         box.appendChild(p);
     }
@@ -2016,7 +2020,7 @@ function registerServiceWorker() {
         if (!registration.waiting || !navigator.serviceWorker.controller) return;
         button.hidden = false;
         button.onclick = () => {
-            if (testActive || demoRunning || !registration.waiting) return;
+            if (testActive || demoRunning || APFocus.busy() || !registration.waiting) return;
             reloading = true; button.disabled = true;
             registration.waiting.postMessage({type: "SKIP_WAITING"});
         };
@@ -2066,6 +2070,11 @@ apLevelSelect.addEventListener("change", unlessDemo(() => {
 }));
 elements.applyButton.addEventListener("click", unlessDemo(applySettings));
 elements.modeSelect.addEventListener("change", unlessDemo(() => {
+    if (elements.modeSelect.value === "apFocus") {
+        elements.modeSelect.value = testMode;
+        location.hash = "ap";
+        return;
+    }
     // Respect the explicitly selected range in every mode, the cold check included:
     // nothing rewrites From/To when the mode changes.
     if (ready) applySettings(); else updateIntervalPickerVisibility();
@@ -2169,6 +2178,21 @@ window.addEventListener("resize", () => {
 });
 initializeAudio();
 registerServiceWorker();
+APFocus.init({
+    site: AP_APP_ID, context: audioContext, language: () => currentLanguage, text: t,
+    onEnter() {
+        if (demoRunning) cancelDemo();
+        if (testActive || (apSession && !apSession.finished)) stopTest();
+        releaseAllKeys();
+        player?.cancelQueue(audioContext);
+        TrainingCore.cancelAudio();
+    },
+    remember(midi) {
+        lastApPresentedMidi = midi;
+        try { localStorage.setItem(AP_LAST_MIDI_KEY, String(midi)); } catch (_) {}
+    },
+    onExit: refreshApHistory
+});
 
 
 function midiFromName(name) {

@@ -1,9 +1,21 @@
 /* A cache belongs to this app and scope; unrelated PWAs are never deleted. */
 const PREFIX = "violin-ear-trainer";
-const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.4.1';
+const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.5.0';
 const ASSETS = [
   "./",
   "./index.html",
+  "./ap-focus.css",
+  "./ap-focus-copy.js",
+  "./ap-focus-model.js",
+  "./ap-focus-audio.js",
+  "./ap-focus.js",
+  "./ap-audio/piano-4.bin",
+  "./ap-audio/piano-5.bin",
+  "./ap-audio/piano-6.bin",
+  "./ap-audio/sources.json",
+  "./ap-audio/violin-4.bin",
+  "./ap-audio/violin-5.bin",
+  "./ap-audio/violin-6.bin",
   "./training-tracker.js",
   "./styles.css",
   "./training-core.js",

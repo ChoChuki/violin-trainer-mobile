@@ -125,17 +125,17 @@
         pageRows.set(key,recent);
         const fallback=()=>{
             const saved=new Map(fallbackRows(id,store,namespace).concat(rows).map(r=>[r.id,r]));
-            TrainingCore.write(`${namespace}-fallback-${id}-${store}`,[...saved.values()]);
+            return TrainingCore.write(`${namespace}-fallback-${id}-${store}`,[...saved.values()]);
         };
         const db=await dbFor(id,namespace);
-        if (!db) {fallback();return;}
-        await new Promise(resolve=>{
+        if (!db) return fallback();
+        return new Promise(resolve=>{
             try {
                 const tx=db.transaction(store,'readwrite');
                 for (const row of rows) tx.objectStore(store).put(row);
-                tx.oncomplete=()=>{db.close();resolve();};
-                tx.onabort=()=>{db.close();fallback();resolve();};
-            } catch (_) {db.close();fallback();resolve();}
+                tx.oncomplete=()=>{db.close();resolve(true);};
+                tx.onabort=()=>{db.close();resolve(fallback());};
+            } catch (_) {db.close();resolve(fallback());}
         });
     }
     async function allRows(id,store,namespace = "ap") {

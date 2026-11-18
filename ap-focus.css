@@ -1,0 +1,35 @@
+.af-entry {display:block; text-align:center; margin:8px 0; padding:11px; border-radius:9px; font-weight:650; text-decoration:none;}
+.training-round .af-entry, .demo-running .af-entry {display:none;}
+.app-shell.focus-open > :not(.app-header):not(#focusPanel):not(.tracker-strip):not(#storageWarning),
+.app-shell.focus-open #status, .app-shell.focus-open #audioReload,
+.app-shell.focus-round .tracker-strip, .app-shell.focus-round .update-button {display:none !important;}
+#focusPanel [hidden], #focusPanel[hidden] {display:none !important;}
+#focusPanel {margin:8px 0; padding:clamp(14px,4vw,26px); background:#fff; border:1px solid #d1d9df; border-radius:14px; color:#202930;}
+#focusPanel h2, #focusPanel h3, #focusPanel p {margin:0 0 .65rem;}
+#focusPanel h2 {font-size:clamp(22px,5vw,30px); line-height:1.15;}
+#focusPanel summary, #focusPanel button, #focusPanel select {cursor:pointer;}
+#focusPanel button, #focusPanel select {min-height:42px; height:auto; white-space:normal; line-height:1.22;}
+#focusPanel button, .af-entry {touch-action:manipulation;}
+.af-head, .af-group, .af-option {display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.af-head {border-bottom:1px solid #e2e6e9; padding-bottom:6px; margin-bottom:14px;}
+.af-head a, .af-plain {color:#145569;}
+.af-instrument,.af-muted {font-size:.85rem;color:#54616a;}
+.af-modes {display:grid; gap:6px; margin:12px 0;}
+.af-modes button {display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:start; padding:10px 14px;}
+.af-modes small {font-weight:normal;}
+.af-group {justify-content:flex-start;margin:12px 0;}
+#focusPanel details {border-top:1px solid #e1e6e8;padding:8px 0;}
+#focusPanel summary {font-weight:600;padding:5px 0;}
+.af-notes,.af-actions,.af-example,.af-filters {display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0;}
+#focusPanel .af-notes button {min-width:47px; flex:0 1 auto;}
+#focusPanel button[aria-pressed="true"] {background:#174b63; color:white;}
+.af-option {margin:8px 0;}
+.af-option input[type=number] {width:5em;}
+#focusPanel table {border-collapse:collapse;width:100%;text-align:left;font-size:.9rem; margin:10px 0;}
+#focusPanel th,#focusPanel td {padding:5px 2px;border-bottom:1px solid #e1e6e8;}
+.af-plain {border:0;background:transparent;padding:5px 8px;text-decoration:underline;font-size:.9rem;}
+.af-end {margin-top:9px;}
+.af-live {min-height:1.6em;font-weight:650;}
+#focusCurrent {font-variant-numeric:tabular-nums;}
+#focusReview li {margin:5px 0;}
+#focusPanel button:focus-visible,#focusPanel a:focus-visible,#focusPanel summary:focus-visible {outline:3px solid #0076af;outline-offset:2px;}

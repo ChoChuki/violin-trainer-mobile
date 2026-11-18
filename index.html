@@ -11,6 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" href="./icon-192.png">
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./ap-focus.css">
 </head>
 <body>
     <main class="app-shell">
@@ -34,6 +35,54 @@
             <button id="audioReload" type="button" class="secondary" hidden>Reload audio</button>
             <p id="status" class="status">Loading violin samples...</p>
         </header>
+
+        <a class="af-entry secondary" href="#ap" id="focusEntry">Focused AP practice</a>
+        <section id="focusPanel" hidden aria-labelledby="focusTitle">
+            <div class="af-head"><div><p class="af-instrument" id="focusInstrument"></p><h2 id="focusTitle"></h2></div><a href="#tools" data-af="back"></a></div>
+            <div id="focusHome" hidden>
+                <p id="focusDaily"></p>
+                <div id="focusModes" class="af-modes"></div>
+                <div class="af-group"><strong data-af="set"></strong><span id="focusCurrent"></span><button class="primary" type="button" id="focusAdd" hidden></button></div>
+                <details id="focusGuide"><summary data-af="examples"></summary><div id="focusExamples"></div></details>
+                <details id="focusSettings"><summary data-af="settings"></summary>
+                    <div id="focusPicker" class="af-notes" role="group"></div>
+                    <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
+                    <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
+                    <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
+                    <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
+                    <details><summary data-af="thresholds"></summary>
+                        <label class="af-option"><span data-af="hit"></span><input id="focusHit" type="number" min="50" max="100"></label>
+                        <label class="af-option"><span data-af="fa"></span><input id="focusFa" type="number" min="0" max="50"></label>
+                    </details>
+                </details>
+                <div id="focusInvite" class="af-group" hidden><span id="focusInvitation"></span><button class="secondary" id="focusSecond" type="button" data-af="second"></button></div>
+                <details id="focusEvidence"><summary data-af="evidence"></summary>
+                    <p id="focusProgress"></p><p id="focusRates"></p><p id="focusFirst"></p>
+                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option><option>4</option><option>5</option><option>6</option></select></div>
+                    <table><thead><tr><th data-af="note"></th><th data-af="practice"></th><th data-af="check"></th><th data-af="days"></th></tr></thead><tbody id="focusStats"></tbody></table>
+                    <p class="af-muted" data-af="recordHelp"></p><p class="af-muted" data-af="countsLocal"></p>
+                    <div class="af-actions"><button class="secondary" type="button" id="focusBackup" data-af="backup"></button><button class="secondary" type="button" id="focusRestore" data-af="restore"></button><input type="file" id="focusFile" hidden accept=".json,application/json"></div>
+                </details>
+            </div>
+            <div id="focusRound" hidden>
+                <p class="af-instrument" id="focusIndex"></p>
+                <p class="af-live" id="focusPrompt" role="status" aria-live="polite"></p>
+                <div id="focusAnswers" class="af-notes"></div>
+                <p class="af-muted" id="focusAnswerHint" data-af="helpAnswer"></p>
+                <div class="af-actions">
+                    <button type="button" class="primary" id="focusNext"></button>
+                    <button type="button" class="secondary" id="focusReplay" data-af="replay"></button>
+                    <button type="button" class="secondary" id="focusAnswerSound" data-af="answerSound"></button>
+                    <button type="button" class="af-plain" id="focusFault" data-af="audio"></button>
+                </div>
+                <button type="button" class="af-plain af-end" id="focusEnd" data-af="finish"></button>
+            </div>
+            <div id="focusSummary" hidden><h3 id="focusSummaryTitle"></h3><p id="focusScore"></p>
+                <div id="focusContinue" class="af-actions"></div>
+                <details><summary data-af="results"></summary><ol id="focusReview"></ol></details>
+            </div>
+            <p id="focusNotice" class="af-muted" aria-live="polite"></p>
+        </section>
 
         <p id="storageWarning" role="alert" hidden></p>
         <!-- AP prompt, answers and results come first: during a round the settings are hidden,
@@ -76,6 +125,7 @@
                     <select id="modeSelect">
                         <option value="single">Single note</option>
                         <option value="interval">Two notes</option>
+                        <option value="apFocus">Focused AP practice</option>
                         <option value="ap">Absolute pitch</option>
                         <option value="apLearn">AP learning</option>
                         <option value="apCold">AP cold check</option>
@@ -251,6 +301,10 @@
     <script src="./relative-course.js"></script>
     <script src="./pitch-detect.js"></script>
     <script src="./relative-ui.js"></script>
+    <script src="./ap-focus-copy.js"></script>
+    <script src="./ap-focus-model.js"></script>
+    <script src="./ap-focus-audio.js"></script>
+    <script src="./ap-focus.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>
